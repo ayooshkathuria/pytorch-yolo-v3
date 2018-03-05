@@ -8,6 +8,7 @@ import numpy as np
 import cv2 
 import matplotlib.pyplot as plt
 from util import count_parameters as count
+from util import convert2cpu as cpu
 
 class test_net(nn.Module):
     def __init__(self, num_layers, input_size):
@@ -219,6 +220,8 @@ class Darknet(nn.Module):
         super(Darknet, self).__init__()
         self.blocks = parse_cfg(cfgfile)
         self.inp, self.module_list, self.loss = create_modules(self.blocks)
+        self.header = torch.IntTensor([0,0,0,0])
+        self.seen = 0
     
     def get_blocks(self):
         return self.blocks
@@ -262,7 +265,9 @@ class Darknet(nn.Module):
         # 2. Minor Version Number
         # 3. Subversion number 
         # 4. IMages seen 
-        headers = np.fromfile(fp, dtype = np.int32, count = 4)
+        header = np.fromfile(fp, dtype = np.int32, count = 4)
+        self.header = torch.from_numpy(header)
+        self.seen = self.header[3]
         
         #The rest of the values are the weights
         # Let's load them up
@@ -337,21 +342,61 @@ class Darknet(nn.Module):
                 conv_weights = conv_weights.view_as(conv.weight.data)
                 conv.weight.data.copy_(conv_weights)
                 
-        def save_weights(self, weightfile):
+    def save_weights(self, savedfile, cutoff = 0):
+            
+        if cutoff <= 0:
+            cutoff = len(self.blocks) - 1
+        
+        fp = open(savedfile, 'wb')
+        
+        # Attach the header at the top of the file
+        self.header[3] = self.seen
+        header = self.header
 
+        header = header.numpy()
+        header.tofile(fp)
+        
+        # Now, let us save the weights 
+        for i in range(len(self.module_list)):
+            module_type = self.blocks[i+1]["type"]
+            
+            if (module_type) == "convolutional":
+                model = self.module_list[i]
+                try:
+                    batch_normalize = int(self.blocks[i+1]["batch_normalize"])
+                except:
+                    batch_normalize = 0
+                    
+                conv = model[0]
+
+                if (batch_normalize):
+                    bn = model[1]
                 
-              
+                    #If the parameters are on GPU, convert them back to CPU
+                    #We don't convert the parameter to GPU
+                    #Instead. we copy the parameter and then convert it to CPU
+                    #This is done as weight are need to be saved during training
+                    cpu(bn.bias.data).numpy().tofile(fp)
+                    cpu(bn.weight.data).numpy().tofile(fp)
+                    cpu(bn.running_mean).numpy().tofile(fp)
+                    cpu(bn.running_var).numpy().tofile(fp)
+                
+            
+                else:
+                    cpu(conv.bias.data).numpy().tofile(fp)
                 
                 
-                
+                #Let us save the weights for the Convolutional layers
+                cpu(conv.weight.data).numpy().tofile(fp)
+               
 
 
 cfgfile = "cfg/yolo-voc.cfg"
 dn = Darknet(cfgfile)
 weightfile = 'yolo-voc.weights'
 dn.load_weights(weightfile)
-dn(get_test_input())
-
+savedfile = 'saved.weights'
+dn.save_weights(savedfile)
 
 
 
