@@ -23,7 +23,7 @@ class test_net(nn.Module):
         
 def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
-#    img = cv2.resize(img, (416,416)) 
+    img = cv2.resize(img, (416,416)) 
     img_ =  img[:,:,::-1].transpose((2,0,1))
     img_ = img_[np.newaxis,:,:,:]/255.0
     img_ = torch.from_numpy(img_).float()
