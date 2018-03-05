@@ -64,7 +64,7 @@ def parse_cfg(cfgfile):
 
 class MaxPoolStride1(nn.Module):
     def __init__(self, kernel_size):
-        super(nn.Module).__init__()
+        super(MaxPoolStride1, self).__init__()
         self.kernel_size = kernel_size
         self.pad = kernel_size - 1
     
@@ -72,6 +72,28 @@ class MaxPoolStride1(nn.Module):
         padded_x = F.pad(x, (0, self.pad, 0, self.pad), mode = "duplicate")
         pooled_x = F.max_pool2d(padded_x, self.kernel_size, padding = self.padding)
         return pooled_x
+
+class RouteLayer(nn.Module):
+    def __init__(self, index, start, end):
+        super(RouteLayer, self).__init__()
+        self.start = start
+        self.end = end
+        self.index = index
+    
+    def forward(self, route_cache):
+        routed_map = None
+        maps = route_cache[self.index]
+        try:
+            start_map, end_map = maps
+            routed_map = torch.cat(maps, dim = 1)
+        except ValueError:
+            routed_map = start_map
+        
+        return routed_map
+        
+            
+        
+        
     
 def create_modules(blocks):
     inp_info = blocks[0]     #Captures the information about the input and pre-processing
@@ -144,7 +166,7 @@ def create_modules(blocks):
             module.add_module("pool_{0}".format(index), pool)
             
             
-        
+        #If it is a route layer
         elif (x["type"] == "route"):
             x["layers"] = x["layers"].split(',')
             print(x["layers"])
@@ -192,7 +214,7 @@ def create_modules(blocks):
         index += 1
     
     print (list((enumerate(output_filters))))
-    return module_list
+    return (inp_info, module_list, loss)
 
 class darknet(nn.Module):
     def __init__(self, cfgfile):
@@ -213,21 +235,13 @@ class darknet(nn.Module):
     
 
 
-cfgfile = "cfg/yolo-voc.cfg"
-dn = darknet(cfgfile)
-blocks = dn.get_blocks()
-module_list = dn.get_module_list()
 
-w = 0
-i = 0
 
-def count_parameters(model):
-    return sum(p.numel() for p in model.parameters())
 
-for x in module_list:
-    w += count_parameters(x)
-    print (i, w)
-    i += 1
+
+
+
+
 
 
         
