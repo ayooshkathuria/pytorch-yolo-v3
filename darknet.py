@@ -78,18 +78,7 @@ class RouteLayer(nn.Module):
         super(RouteLayer, self).__init__()
         self.start = start
         self.end = end
-        self.index = index
-    
-    def forward(self, route_cache):
-        routed_map = None
-        maps = route_cache[self.index]
-        try:
-            start_map, end_map = maps
-            routed_map = torch.cat(maps, dim = 1)
-        except ValueError:
-            routed_map = start_map
         
-        return routed_map
 #        
 class ReOrgLayer(nn.Module):
     def __init__(self, stride):
@@ -161,7 +150,7 @@ def create_modules(blocks):
             #Check the activation. 
             #It is either Linear or a Leaky ReLU for YOLO
             if activation == "leaky":
-                activn = nn.LeakyReLU()
+                activn = nn.LeakyReLU(0.1)
                 module.add_module("leaky_{0}".format(index), activn)
             
             
@@ -220,32 +209,34 @@ def create_modules(blocks):
         output_filters.append(filters)
         index += 1
     
-    print (list((enumerate(output_filters))))
     return (inp_info, module_list, loss)
 
-class darknet(nn.Module):
+class Darknet(nn.Module):
     def __init__(self, cfgfile):
-        super(darknet, self).__init__()
+        super(Darknet, self).__init__()
         self.blocks = parse_cfg(cfgfile)
-        self.module_list = create_modules(self.blocks)
+        self.input, self.module_list, self.loss = create_modules(self.blocks)
+        self.route_cache = generate_route_cache()
+
         
         
-        
+    
     def forward(self, x):
-        return self.blocks
+        
     
     def get_blocks(self):
         return self.blocks
     
     def get_module_list(self):
-        return self.module_list
+        return self.module_list[1]
     
 
 
 
 
 cfgfile = "cfg/yolo-voc.cfg"
-dn = darknet(cfgfile)
+dn = Darknet(cfgfile)
+print(dn.get_module_list())
 
 
 
