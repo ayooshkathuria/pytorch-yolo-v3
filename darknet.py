@@ -74,11 +74,11 @@ class MaxPoolStride1(nn.Module):
         return pooled_x
 
 class RouteLayer(nn.Module):
-    def __init__(self, index, start, end):
+    def __init__(self, start, end):
         super(RouteLayer, self).__init__()
         self.start = start
         self.end = end
-        
+
 #        
 class ReOrgLayer(nn.Module):
     def __init__(self, stride):
@@ -183,7 +183,7 @@ def create_modules(blocks):
             
 
             
-            route = RouteLayer(index, start, end)
+            route = RouteLayer(start, end)
             module.add_module("route_{0}".format(index), route)
                 
             
@@ -216,19 +216,15 @@ class Darknet(nn.Module):
         super(Darknet, self).__init__()
         self.blocks = parse_cfg(cfgfile)
         self.input, self.module_list, self.loss = create_modules(self.blocks)
-        self.route_cache = generate_route_cache()
 
         
-        
-    
-    def forward(self, x):
-        
+                
     
     def get_blocks(self):
         return self.blocks
     
     def get_module_list(self):
-        return self.module_list[1]
+        return self.module_list
     
 
 
