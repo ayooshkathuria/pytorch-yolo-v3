@@ -23,6 +23,7 @@ class test_net(nn.Module):
         
 def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
+#    img = cv2.resize(img, (416,416)) 
     img_ =  img[:,:,::-1].transpose((2,0,1))
     img_ = img_[np.newaxis,:,:,:]/255.0
     img_ = torch.from_numpy(img_).float()
@@ -88,9 +89,10 @@ class ReOrgLayer(nn.Module):
     def forward(self,x):
         assert(x.data.dim() == 4)
         B,C,H,W = x.data.shape
-        ws = hs = self.stride
-        assert(H % hs == 0),  "The stride " + self.stride + " is not a proper divisor of height " + H
-        assert(W % ws == 0),  "The stride " + self.stride + " is not a proper divisor of height " + W
+        hs = self.stride
+        ws = self.stride
+        assert(H % hs == 0),  "The stride " + str(self.stride) + " is not a proper divisor of height " + str(H)
+        assert(W % ws == 0),  "The stride " + str(self.stride) + " is not a proper divisor of height " + str(W)
         x = x.view(B,C, H // hs, hs, W // ws, ws).transpose(-2,-3).contiguous()
         x = x.view(B,C, H // hs * W // ws, hs, ws).contiguous()
         x = x.view(B,C, H // hs * W // ws, hs*ws).transpose(-1,-2).contiguous()
@@ -215,24 +217,45 @@ class Darknet(nn.Module):
     def __init__(self, cfgfile):
         super(Darknet, self).__init__()
         self.blocks = parse_cfg(cfgfile)
-        self.input, self.module_list, self.loss = create_modules(self.blocks)
-
-        
-                
+        self.inp, self.module_list, self.loss = create_modules(self.blocks)
     
     def get_blocks(self):
         return self.blocks
     
     def get_module_list(self):
         return self.module_list
-    
 
+                
+    def forward(self):
+        x = get_test_input()
+        outputs = {}   #We cache the outputs for the route layer
+        print
+        index = 0
+        for i in range(len(self.module_list)):
+            module_type = (self.blocks[i + 1]["type"])
+            if module_type == "convolutional" or module_type == "maxpool" or module_type=="reorg":
+                x = self.module_list[i](x)
+                outputs[i] = x
+                pass
+            elif module_type == "route":
+                layers = self.blocks[i+1]["layers"]
+                if len(layers) == 1:
+                    x = outputs[index + int(layers[0])]
 
+                else:
+                    start = outputs[index + int(layers[0])]
+                    end = outputs[index + int(layers[1])]
+                    x = torch.cat((start, end), 1)
+                outputs[index] = x
+                
+            index += 1
+        return x
+            
 
 
 cfgfile = "cfg/yolo-voc.cfg"
 dn = Darknet(cfgfile)
-print(dn.get_module_list())
+print(dn())
 
 
 
