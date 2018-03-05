@@ -90,8 +90,25 @@ class RouteLayer(nn.Module):
             routed_map = start_map
         
         return routed_map
+#        
+class ReOrgLayer(nn.Module):
+    def __init__(self, stride):
+        super(ReOrgLayer, self).__init__()
+        self.stride= stride
         
-            
+    def forward(self,x):
+        assert(x.data.dim() == 4)
+        B,C,H,W = x.data.shape
+        ws = hs = self.stride
+        assert(H % hs == 0),  "The stride " + self.stride + " is not a proper divisor of height " + H
+        assert(W % ws == 0),  "The stride " + self.stride + " is not a proper divisor of height " + W
+        x = x.view(B,C, H // hs, hs, W // ws, ws).transpose(-2,-3).contiguous()
+        x = x.view(B,C, H // hs * W // ws, hs, ws).contiguous()
+        x = x.view(B,C, H // hs * W // ws, hs*ws).transpose(-1,-2).contiguous()
+        x = x.view(B, C, ws*hs, H // ws, W // ws).contiguous()
+        x = x.view(B, C*ws*hs, H // ws, W // ws).contiguous()
+        return x
+        
         
         
     
@@ -169,7 +186,6 @@ def create_modules(blocks):
         #If it is a route layer
         elif (x["type"] == "route"):
             x["layers"] = x["layers"].split(',')
-            print(x["layers"])
             start = int(x["layers"][0])
             try:
                 end = int(x["layers"][1])
@@ -178,32 +194,23 @@ def create_modules(blocks):
             
 
             
-            try:
-                route = RouteLayer(start, end)
-                module.add_module("route_{0}".format(index), route)
-
-            except:
+            route = RouteLayer(index, start, end)
+            module.add_module("route_{0}".format(index), route)
                 
-                print("To be implemented")
             
             if end < 0:
-                print("Hello")
                 filters = output_filters[index + start] + output_filters[index + end]
             else:
                 output_filters[index + start]
                 filters= output_filters[index + start]
             
              
-        
+        #If it's a reorganisation layer (Identity mappings in ResNet)
         elif (x["type"] == "reorg"):
             stride = int(x["stride"])
             
-            try:    
-                reorg = ReorgLayer(stride)
-                module.add_module("reorg_{0}".format(index), reorg)
-
-            except:
-                print("To be implemented")
+            reorg = ReOrgLayer(stride)
+            module.add_module("reorg_{0}".format(index), reorg)
             
             filters = filters*stride*stride
 
@@ -237,9 +244,8 @@ class darknet(nn.Module):
 
 
 
-
-
-
+cfgfile = "cfg/yolo-voc.cfg"
+dn = darknet(cfgfile)
 
 
 
