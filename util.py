@@ -1,5 +1,5 @@
 
-from __future__ iimport division
+from __future__ import division
 
 import torch 
 import torch.nn as nn
@@ -19,4 +19,4 @@ def convert2cpu(matrix):
     if matrix.is_cuda:
         return torch.FloatTensor(matrix.size()).copy_(matrix)
     else:
-return matrix
+        return matrix
