@@ -20,3 +20,5 @@ def convert2cpu(matrix):
         return torch.FloatTensor(matrix.size()).copy_(matrix)
     else:
         return matrix
+
+
