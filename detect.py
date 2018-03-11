@@ -14,7 +14,9 @@ import os
 import os.path as osp
 from darknet import Darknet
 from preprocess import prep_image
+from bbox import confidence_filter
 import time
+
 
 class test_net(nn.Module):
     def __init__(self, num_layers, input_size):
@@ -97,12 +99,17 @@ if __name__ ==  '__main__':
         start = time.time()
         #load the image 
         inp_image = prep_image(image, network_dim)
-        result = model(inp_image)
-        
-        #Apply offsets to the result predictions
-        
+        print (inp_image.data.shape)
+        prediction = model(inp_image)
+        print(prediction.data.shape)
+      
 
         #get the boxes with object confidence > threshold
+        prediction = confidence_filter(prediction, 0.5,)
+        
+        
+        #Apply offsets to the result predictions
+        assert False
         
         
         #perform NMS on these boxes
