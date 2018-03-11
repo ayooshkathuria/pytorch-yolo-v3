@@ -17,6 +17,7 @@ def prep_image(img, network_dim):
     
     Returns a Variable 
     """
+    img = cv2.imread(img)
     img = cv2.resize(img, network_dim) 
     img_ =  img[:,:,::-1].transpose((2,0,1))
     img_ = img_[np.newaxis,:,:,:]/255.0
