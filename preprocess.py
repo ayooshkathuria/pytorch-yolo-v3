@@ -25,7 +25,7 @@ def prep_image(img, network_dim):
     img_ = Variable(img_)
     return img_
 
-def batchify(imlist, batch_size, network_dim):
+def prep_batch(imlist, batch_size, network_dim):
     num_batches = len(imlist)//batch_size + 1
     im_batches = []
     for batch in range(num_batches):
