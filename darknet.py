@@ -110,7 +110,8 @@ def create_modules(blocks):
     modules = blocks[1:-1]   #The layers of the neural network
     loss = blocks[-1]        # Loss function 
     
-    module_list = []
+    
+    module_list = nn.ModuleList()
     
     index = 0    #indexing blocks helps with implementing route  layers (skip connections)
 
@@ -231,7 +232,6 @@ class Darknet(nn.Module):
 
                 
     def forward(self, x):
-        x = get_test_input()
         outputs = {}   #We cache the outputs for the route layer
         
         for i in range(len(self.module_list)):
@@ -391,16 +391,7 @@ class Darknet(nn.Module):
                
 
 
-cfgfile = "cfg/yolo-voc.cfg"
-dn = Darknet(cfgfile)
-weightfile = 'yolo-voc.weights'
-dn.load_weights(weightfile)
-savedfile = 'saved.weights'
-dn.save_weights(savedfile)
 
-
-
-        
         
             
         
