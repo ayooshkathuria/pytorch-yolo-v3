@@ -21,8 +21,7 @@ def prep_image(img, network_dim):
     """
     img = cv2.imread(img)
     img = cv2.resize(img, network_dim) 
-    img_ =  img[:,:,::-1].transpose((2,0,1))
-    img_ = img_[np.newaxis,:,:,:]/255.0
+    img_ =  img[:,:,::-1].transpose((2,0,1)).copy()
     img_ = torch.from_numpy(img_).float().div(255.0).unsqueeze(0)
 
     img_ = Variable(img_)
