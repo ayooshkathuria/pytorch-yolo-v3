@@ -9,6 +9,8 @@ import cv2
 import matplotlib.pyplot as plt
 from util import count_parameters as count
 from util import convert2cpu as cpu
+from PIL import Image, ImageDraw
+
 
         
 def prep_image(img, network_dim):
@@ -21,7 +23,8 @@ def prep_image(img, network_dim):
     img = cv2.resize(img, network_dim) 
     img_ =  img[:,:,::-1].transpose((2,0,1))
     img_ = img_[np.newaxis,:,:,:]/255.0
-    img_ = torch.from_numpy(img_).float()
+    img_ = torch.from_numpy(img_).float().div(255.0).unsqueeze(0)
+
     img_ = Variable(img_)
     return img_
 
@@ -41,5 +44,5 @@ def prep_batch(imlist, batch_size, network_dim):
                 batchx.copy_(inp_image.data)
             else:
                 batchx = torch.cat((batchx, inp_image.data))
-        im_batches.append(Variable(batchx))
+        im_batches.append(Variable(batchx, volatile = True))
     return im_batches

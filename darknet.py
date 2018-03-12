@@ -399,7 +399,7 @@ class Darknet(nn.Module):
 
 
 dn = Darknet('cfg/yolo-voc.cfg')
-print(dn.anchors)
+#print(dn.anchors)
             
         
             
