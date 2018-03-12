@@ -45,6 +45,8 @@ def parse_cfg(cfgfile):
     lines = file.read().split('\n')     #store the lines in a list
     lines = [x for x in lines if len(x) > 0] #get read of the empty lines 
     lines = [x for x in lines if x[0] != '#']  
+    lines = [x.rstrip().lstrip() for x in lines]
+
     
     block = {}
     blocks = []
@@ -56,10 +58,10 @@ def parse_cfg(cfgfile):
             if len(block) != 0:
                 blocks.append(block)
                 block = {}
-            block["type"] = line[1:-1]
+            block["type"] = line[1:-1].rstrip()
         else:
             key,value = line.split("=")
-            block[key] = value
+            block[key.rstrip()] = value.lstrip()
     blocks.append(block)
     return blocks
 #    print('\n\n'.join([repr(x) for x in blocks]))
@@ -391,8 +393,8 @@ class Darknet(nn.Module):
                
 
 
-
-        
+dn = Darknet('cfg/yolo-voc.cfg')
+print(dn.loss)
             
         
             
