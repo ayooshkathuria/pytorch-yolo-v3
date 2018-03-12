@@ -225,7 +225,12 @@ class Darknet(nn.Module):
         self.inp, self.module_list, self.loss = create_modules(self.blocks)
         self.header = torch.IntTensor([0,0,0,0])
         self.seen = 0
-    
+        anchors = self.loss["anchors"]
+        anchors = anchors.split(',')
+
+        anchors = [float(x.lstrip()) for x in anchors]
+        anchors = [[anchors[i], anchors[i+1]] for i in range(0, len(anchors), 2)]
+        self.anchors = anchors
     def get_blocks(self):
         return self.blocks
     
@@ -394,7 +399,7 @@ class Darknet(nn.Module):
 
 
 dn = Darknet('cfg/yolo-voc.cfg')
-print(dn.loss)
+print(dn.anchors)
             
         
             
