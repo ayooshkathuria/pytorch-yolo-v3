@@ -74,7 +74,7 @@ class MaxPoolStride1(nn.Module):
         self.pad = kernel_size - 1
     
     def forward(self, x):
-        padded_x = F.pad(x, (0, self.pad, 0, self.pad), mode = "duplicate")
+        padded_x = F.pad(x, (0, self.pad, 0, self.pad), mode = "replicate")
         pooled_x = F.max_pool2d(padded_x, self.kernel_size, padding = self.padding)
         return pooled_x
 
@@ -84,9 +84,10 @@ class RouteLayer(nn.Module):
         self.start = start
         self.end = end
 
-#        
+#       
+        
 class ReOrgLayer(nn.Module):
-    def __init__(self, stride):
+    def __init__(self, stride = 2):
         super(ReOrgLayer, self).__init__()
         self.stride= stride
         
@@ -98,15 +99,13 @@ class ReOrgLayer(nn.Module):
         assert(H % hs == 0),  "The stride " + str(self.stride) + " is not a proper divisor of height " + str(H)
         assert(W % ws == 0),  "The stride " + str(self.stride) + " is not a proper divisor of height " + str(W)
         x = x.view(B,C, H // hs, hs, W // ws, ws).transpose(-2,-3).contiguous()
-        x = x.view(B,C, H // hs * W // ws, hs, ws).contiguous()
+        x = x.view(B,C, H // hs * W // ws, hs, ws)
         x = x.view(B,C, H // hs * W // ws, hs*ws).transpose(-1,-2).contiguous()
-        x = x.view(B, C, ws*hs, H // ws, W // ws).contiguous()
-        x = x.view(B, C*ws*hs, H // ws, W // ws).contiguous()
+        x = x.view(B, C, ws*hs, H // ws, W // ws).transpose(1,2).contiguous()
+        x = x.view(B, C*ws*hs, H // ws, W // ws)
         return x
-        
-        
-        
-    
+
+
 def create_modules(blocks):
     inp_info = blocks[0]     #Captures the information about the input and pre-processing
     modules = blocks[1:-1]   #The layers of the neural network
@@ -157,7 +156,7 @@ def create_modules(blocks):
             #Check the activation. 
             #It is either Linear or a Leaky ReLU for YOLO
             if activation == "leaky":
-                activn = nn.LeakyReLU(0.1)
+                activn = nn.LeakyReLU(0.1, inplace = True)
                 module.add_module("leaky_{0}".format(index), activn)
             
             
@@ -218,6 +217,7 @@ def create_modules(blocks):
     
     return (inp_info, module_list, loss)
 
+
 class Darknet(nn.Module):
     def __init__(self, cfgfile):
         super(Darknet, self).__init__()
@@ -246,7 +246,6 @@ class Darknet(nn.Module):
             if module_type == "convolutional" or module_type == "maxpool" or module_type=="reorg":
                 x = self.module_list[i](x)
                 outputs[i] = x
-                pass
             elif module_type == "route":
                 layers = self.blocks[i+1]["layers"]
                 if len(layers) == 1:
@@ -257,7 +256,8 @@ class Darknet(nn.Module):
                     end = outputs[i + int(layers[1])]
                     x = torch.cat((start, end), 1)
                 outputs[i] = x
-                
+         
+     
         return x
     
 
@@ -397,28 +397,6 @@ class Darknet(nn.Module):
                 cpu(conv.weight.data).numpy().tofile(fp)
                
 
-
-dn = Darknet('cfg/yolo-voc.cfg')
-#print(dn.anchors)
-            
-        
-            
-            
-            
-            
-        
-
-            
-    
-            
-                
-                
-            
-        
-            
-            
-            
-            
         
             
             
