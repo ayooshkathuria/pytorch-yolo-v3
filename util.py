@@ -32,22 +32,12 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA):
     prediction = prediction.transpose(1,2).contiguous()
     prediction = prediction.view(batch_size, grid_size*grid_size*num_anchors, bbox_attrs)
     
-    #Creating a new Tensor to store the transformed data
-    #Just avoiding inplace operations    
-    temp = torch.FloatTensor(prediction.shape)
-
-    if CUDA:
-        temp = temp.cuda()
-    
-    temp1 = temp[:,:,2]
-    cacher = torch.FloatTensor(temp1.shape).cuda()
-    cacher.copy_(temp1)
     
     #Sigmoid the  centre_X, centre_Y. and object confidencce
-    temp[:,:,0].copy_(torch.sigmoid(prediction[:,:,0]).data)
-    temp[:,:,1].copy_(torch.sigmoid(prediction[:,:,1]).data)
-    temp[:,:,4].copy_(torch.sigmoid(prediction[:,:,4]).data)
-    temp[:,:,2:4].copy_((prediction[:,:,2:4]).data)
+    prediction[:,:,0] = torch.sigmoid(prediction[:,:,0])
+    prediction[:,:,1] = torch.sigmoid(prediction[:,:,1])
+    prediction[:,:,4] = torch.sigmoid(prediction[:,:,4])
+
     
     #Add the center offsets
     grid_len = np.arange(grid_size)
@@ -62,7 +52,7 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA):
     
     x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,num_anchors).view(-1,2).unsqueeze(0)
     
-    temp[:,:,:2] += x_y_offset
+    prediction[:,:,:2] += x_y_offset
       
     #log space transform height and the width
     anchors = torch.FloatTensor(anchors)
@@ -71,12 +61,12 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA):
         anchors = anchors.cuda()
     
     anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
-    temp[:,:,2:4] = torch.exp(temp[:,:,2:4])*anchors
+    prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
 
     #Softmax the class scores
-    temp[:,:,5: 5 + num_classes].copy_(nn.Softmax(-1)(prediction[:,:, 5 : 5 + num_classes]).data)
+    prediction[:,:,5: 5 + num_classes] = nn.Softmax(-1)(Variable(prediction[:,:, 5 : 5 + num_classes])).data
 
-    return temp
+    return prediction
 
 
 
