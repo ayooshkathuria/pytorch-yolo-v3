@@ -41,6 +41,35 @@ def get_test_input():
 
 
 
+def sanity_fix(box):
+    if (box[0] > box[2]):
+        box[0], box[2] = box[2], box[0]
+    
+    if (box[1] >  box[3]):
+        box[1], box[3] = box[3], box[1]
+        
+    return box
+
+def abs_coord(prediction, inp_dim):
+    pass
+
+    
+def nms(predictions, nms_conf):
+    pass
+
+def get_abs_coord_tensor(box):
+    box_a = box.new(box.shape)
+    print(box_a.shape)
+    box_a[:,0] = (box[:,0] - box[:,2]/2) 
+    box_a[:,1] = (box[:,1] - box[:,3]/2) 
+    box_a[:,2] = (box[:,0] + box[:,2]/2) 
+    box_a[:,3] = (box[:,1] + box[:,3]/2) 
+    
+    box[:,:4] = box_a
+    
+    return box
+
+assert False
 def arg_parse():
     """
     Parse arguements to the detect module
@@ -64,62 +93,6 @@ def arg_parse():
     
     return parser.parse_args()
 
-#def predict_transform(prediction, inp_dim, anchors):
-#    batch_size = prediction.size(0)
-#    network_stride = 32
-#    grid_size = inp_dim // network_stride
-#    bbox_attrs = 5 + num_classes
-#    num_anchors = len(anchors)
-#    
-#    prediction = prediction.view(batch_size, bbox_attrs*num_anchors, grid_size*grid_size)
-#    prediction = prediction.transpose(1,2).contiguous()
-#    prediction = prediction.view(batch_size, grid_size*grid_size*num_anchors, bbox_attrs)
-#    
-#    #Creating a new Tensor to store the transformed data
-#    #Just avoiding inplace operations    
-#    temp = torch.FloatTensor(prediction.shape)
-#
-#    if CUDA:
-#        temp = temp.cuda()
-#    
-#    temp1 = temp[:,:,2]
-#    cacher = torch.FloatTensor(temp1.shape).cuda()
-#    cacher.copy_(temp1)
-#    
-#    #Sigmoid the  centre_X, centre_Y. and object confidencce
-#    temp[:,:,0].copy_(torch.sigmoid(prediction[:,:,0]).data)
-#    temp[:,:,1].copy_(torch.sigmoid(prediction[:,:,1]).data)
-#    temp[:,:,4].copy_(torch.sigmoid(prediction[:,:,4]).data)
-#    temp[:,:,2:4].copy_((prediction[:,:,2:4]).data)
-#    
-#    #Add the center offsets
-#    grid_len = np.arange(grid_size)
-#    a,b = np.meshgrid(grid_len, grid_len)
-#    
-#    x_offset = torch.FloatTensor(a).view(-1,1)
-#    y_offset = torch.FloatTensor(b).view(-1,1)
-#    
-#    if CUDA:
-#        x_offset = x_offset.cuda()
-#        y_offset = y_offset.cuda()
-#    
-#    x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,num_anchors).view(-1,2).unsqueeze(0)
-#    
-#    temp[:,:,:2] += x_y_offset
-#      
-#    #log space transform height and the width
-#    anchors = torch.FloatTensor(anchors)
-#    
-#    if CUDA:
-#        anchors = anchors.cuda()
-#    
-#    anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
-#    temp[:,:,2:4] = torch.exp(temp[:,:,2:4])*anchors
-#
-#    #Softmax the class scores
-#    temp[:,:,5: 5 + num_classes].copy_(nn.Softmax(-1)(prediction[:,:, 5 : 5 + num_classes]).data)
-#
-#    return temp
 
 if __name__ ==  '__main__':
     parser = arg_parse()
@@ -141,6 +114,8 @@ if __name__ ==  '__main__':
     #If there's a GPU availible, put the model on GPU
     if CUDA:
         model.cuda()
+        
+    model.eval()
     
     #Detection phase
     try:
@@ -152,8 +127,9 @@ if __name__ ==  '__main__':
         print ("No file or directory with the name {}".format(images))
         exit()
         
-    batch_size = 5
+    batch_size = 2
     im_batches = prep_batch(imlist, batch_size, network_dim)
+    i = 0
 
     for batch in im_batches:
         #load the image 
@@ -162,25 +138,34 @@ if __name__ ==  '__main__':
         if CUDA:
             batch = batch.cuda()
        
-        pred = model(batch)
-
+        prediction = model(batch)
+        
+        prediction = prediction.data
         #Apply offsets to the result predictions
         #Tranform the predictions as described in the YOLO paper
         
-        prediction = predict_transform(pred, inp_dim, model.anchors, num_classes, CUDA)
+        prediction = predict_transform(prediction, inp_dim, model.anchors, num_classes, CUDA)
         
-        prediction = confidence_filter(prediction, 0.7)
+
         #flatten the prediction vector 
         # B x (bbox cord x no. of anchors) x grid_w x grid_h --> B x bbox x (all the boxes) 
         # Put every proposed box as a row.
         #get the boxes with object confidence > threshold
-     
+        
+        prediction = confidence_filter(prediction, 0.5)
+        assert False
+
+        #Convert the cordinates to absolute coordinates 
+        prediction = abs_coord(prediction, inp_dim)
+
 
         #perform NMS on these boxes
         
         
         
-        #Convert the cordinates to absolute coordinates 
+        
+        
+        
         
         
         
@@ -194,6 +179,7 @@ if __name__ ==  '__main__':
         #generate the detection image 
     
     batch_end_time = time.time()
+
 
 torch.cuda.empty_cache()
         
