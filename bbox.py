@@ -14,6 +14,25 @@ def confidence_filter(result, confidence):
     
     return result
 
+def get_abs_coord(box):
+    box[2], box[3] = abs(box[2]), abs(box[3])
+    x1 = (box[0] - box[2]/2) - 1 
+    y1 = (box[1] - box[3]/2) - 1 
+    x2 = (box[0] + box[2]/2) - 1 
+    y2 = (box[1] + box[3]/2) - 1
+    return x1, y1, x2, y2
+    
+
+
+def sanity_fix(box):
+    if (box[0] > box[2]):
+        box[0], box[2] = box[2], box[0]
+    
+    if (box[1] >  box[3]):
+        box[1], box[3] = box[3], box[1]
+        
+    return box
+
 def bbox_iou(box1, box2, corner_coord = True):
     """
     Returns the IoU of two bounding boxes describe by a 
