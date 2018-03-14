@@ -77,7 +77,13 @@ def bbox_iou(box1, box2, corner_coord = True):
     return iou
 
 
-def pred_abs_coord(box):
+def pred_abs_coord(prediction):
+    #Get indices of non-zero confidence bboxes
+    ind_nz = torch.nonzero(prediction[:,:,4]).tranpose(0,1).contiguous()
+    
+    box = prediction(ind_nz[0], ind_nz[1])
+    
+    
     box_a = box.new(box.shape)
     box_a[:,0] = (box[:,0] - box[:,2]/2) 
     box_a[:,1] = (box[:,1] - box[:,3]/2) 
@@ -86,4 +92,6 @@ def pred_abs_coord(box):
     
     box[:,:4] = box_a
     
-    return box
+    prediction(ind_nz[0], ind_nz[1]) = box
+    
+    return prediction
