@@ -13,7 +13,7 @@ import os
 import os.path as osp
 from darknet import Darknet
 from preprocess import prep_image, prep_batch, inp_to_image
-from bbox import confidence_filter
+from bbox import confidence_filter, pred_abs_coord
 import time
 
 
@@ -41,35 +41,6 @@ def get_test_input():
 
 
 
-def sanity_fix(box):
-    if (box[0] > box[2]):
-        box[0], box[2] = box[2], box[0]
-    
-    if (box[1] >  box[3]):
-        box[1], box[3] = box[3], box[1]
-        
-    return box
-
-def abs_coord(prediction, inp_dim):
-    pass
-
-    
-def nms(predictions, nms_conf):
-    pass
-
-def get_abs_coord_tensor(box):
-    box_a = box.new(box.shape)
-    print(box_a.shape)
-    box_a[:,0] = (box[:,0] - box[:,2]/2) 
-    box_a[:,1] = (box[:,1] - box[:,3]/2) 
-    box_a[:,2] = (box[:,0] + box[:,2]/2) 
-    box_a[:,3] = (box[:,1] + box[:,3]/2) 
-    
-    box[:,:4] = box_a
-    
-    return box
-
-assert False
 def arg_parse():
     """
     Parse arguements to the detect module
@@ -153,11 +124,12 @@ if __name__ ==  '__main__':
         #get the boxes with object confidence > threshold
         
         prediction = confidence_filter(prediction, 0.5)
-        assert False
 
         #Convert the cordinates to absolute coordinates 
-        prediction = abs_coord(prediction, inp_dim)
-
+        prediction = pred_abs_coord(prediction)
+        a = torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()
+        print(prediction[a[0], a[1]])
+        assert False
 
         #perform NMS on these boxes
         
