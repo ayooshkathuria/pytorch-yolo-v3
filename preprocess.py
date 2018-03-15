@@ -47,7 +47,10 @@ def inp_to_image(inp):
 
 
 def prep_batch(imlist, batch_size, network_dim):
-    num_batches = len(imlist)//batch_size + 1
+    leftover = 0
+    if (len(imlist) % batch_size):
+        leftover = 1
+    num_batches = len(imlist)//batch_size + leftover
     im_batches = []
     for batch in range(num_batches):
         batchx = torch.zeros(1, 3, *network_dim)
