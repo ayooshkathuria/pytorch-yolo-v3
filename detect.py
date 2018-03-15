@@ -13,7 +13,7 @@ import os
 import os.path as osp
 from darknet import Darknet
 from preprocess import prep_image, prep_batch, inp_to_image
-from bbox import confidence_filter, pred_abs_coord
+from bbox import confidence_filter, pred_corner_coord, bbox_iou, write_results
 import time
 
 
@@ -57,6 +57,8 @@ def arg_parse():
                         default = "cfg/yolo-voc.cfg")
     parser.add_argument("--weightsfile", dest = "weightsfile", help = "Weights file for the network",
                         default = "yolo-voc.weights")
+    parser.add_argument("--bs", dest = "bs", help = "Batch size", default = 1)
+    
     
     
 
@@ -65,11 +67,14 @@ def arg_parse():
     return parser.parse_args()
 
 
+
 if __name__ ==  '__main__':
     parser = arg_parse()
     images = parser.images
     cfg = parser.cfg
     weightsfile = parser.weightsfile
+    batch_size = parser.bs
+    batch_size = 1
     start = 0
 
     CUDA = torch.cuda.is_available()
@@ -98,9 +103,11 @@ if __name__ ==  '__main__':
         print ("No file or directory with the name {}".format(images))
         exit()
         
-    batch_size = 2
     im_batches = prep_batch(imlist, batch_size, network_dim)
     i = 0
+    
+    output = torch.FloatTensor(1, 8)
+    write = False
 
     for batch in im_batches:
         #load the image 
@@ -112,6 +119,10 @@ if __name__ ==  '__main__':
         prediction = model(batch)
         
         prediction = prediction.data
+        
+        b = batch[0]
+        cv2.imwrite("f.png", inp_to_image(b))
+        
         #Apply offsets to the result predictions
         #Tranform the predictions as described in the YOLO paper
         
@@ -123,18 +134,30 @@ if __name__ ==  '__main__':
         # Put every proposed box as a row.
         #get the boxes with object confidence > threshold
         
-        prediction = confidence_filter(prediction, 0.5)
+        prediction_ = confidence_filter(prediction, 0.5)
 
-        #Convert the cordinates to absolute coordinates 
-        prediction = pred_abs_coord(prediction)
-        a = torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()
-        print(prediction[a[0], a[1]])
-        assert False
+        #Convert the cordinates to absolute coordinates
+        prediction = pred_corner_coord(prediction_)    
 
-        #perform NMS on these boxes
+#        
         
+        #perform NMS on these boxes, and save the results 
+        #I could have done NMS and saving seperately to have a better abstraction
+        #But both these operations require looping, hence 
+        #clubbing these ops in one loop instead of two. 
+        #loops are slower than vectorised operations. 
+        prediction = write_results(prediction, num_classes, nms = True, nms_conf = 0.4)
         
+        prediction[:,0] += i*batch_size
+        i += 1
         
+            
+        if not write:
+            output = prediction
+            write = 1
+        else:
+            output = torch.cat((output,prediction))
+            
         
         
         
@@ -144,12 +167,14 @@ if __name__ ==  '__main__':
         #plot them with openCV, and save the files as well
         
 
-        end = time.time()
 
         
         
         #generate the detection image 
+        
     
+    print(output)
+    inds = output[:,0].long()
     batch_end_time = time.time()
 
 

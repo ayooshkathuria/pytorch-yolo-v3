@@ -67,10 +67,10 @@ def pred_corner_coord(prediction):
     
     
     box_a = box.new(box.shape)
-    box_a[:,0] = (box[:,0] - box[:,2]/2) 
-    box_a[:,1] = (box[:,1] - box[:,3]/2) 
+    box_a[:,0] = (box[:,0] - box[:,2]/2)
+    box_a[:,1] = (box[:,1] - box[:,3]/2)
     box_a[:,2] = (box[:,0] + box[:,2]/2) 
-    box_a[:,3] = (box[:,1] + box[:,3]/2) 
+    box_a[:,3] = (box[:,1] + box[:,3]/2)
     box[:,:4] = box_a[:,:4]
     
     prediction[ind_nz[0], ind_nz[1]] = box
