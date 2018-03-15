@@ -74,4 +74,9 @@ def load_classes(namesfile):
     names = fp.read().split("\n")[:-1]
     return names
 
+def get_im_dim(im):
+    im = cv2.imread(im)
+    w,h = im.shape[1], im.shape[0]
+    return w,h
+
 
