@@ -59,7 +59,7 @@ def bbox_iou(box1, box2):
     return iou
 
 
-def pred_abs_coord(prediction):
+def pred_corner_coord(prediction):
     #Get indices of non-zero confidence bboxes
     ind_nz = torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()
     
