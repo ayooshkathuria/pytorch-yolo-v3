@@ -12,9 +12,10 @@ import argparse
 import os 
 import os.path as osp
 from darknet import Darknet
-from preprocess import prep_image, prep_batch, inp_to_image
+from preprocess import prep_image, prep_batch, inp_to_image, prep_batch_alt
 from bbox import confidence_filter, pred_corner_coord, bbox_iou, write_results
 import time
+
 
 
 class test_net(nn.Module):
@@ -66,7 +67,14 @@ def arg_parse():
     
     return parser.parse_args()
 
-
+def draw_detections(output, im_batches):
+    batches = torch.cat(im_batches).data
+    
+    
+    inds = output[:,0].long()
+    
+    
+    return output, batches
 
 if __name__ ==  '__main__':
     parser = arg_parse()
@@ -74,7 +82,7 @@ if __name__ ==  '__main__':
     cfg = parser.cfg
     weightsfile = parser.weightsfile
     batch_size = parser.bs
-    batch_size = 1
+    batch_size = 10
     start = 0
 
     CUDA = torch.cuda.is_available()
@@ -90,7 +98,8 @@ if __name__ ==  '__main__':
     #If there's a GPU availible, put the model on GPU
     if CUDA:
         model.cuda()
-        
+    
+    #Set the model in evaluation mode
     model.eval()
     
     #Detection phase
@@ -103,16 +112,19 @@ if __name__ ==  '__main__':
         print ("No file or directory with the name {}".format(images))
         exit()
         
-    im_batches = prep_batch(imlist, batch_size, network_dim)
+    im_batches, orig_ims, im_dim_list = prep_batch_alt(imlist, batch_size, network_dim)
     i = 0
     
     output = torch.FloatTensor(1, 8)
     write = False
+    model(get_test_input().cuda())
+    start = time.time()
+    
+    inp_dim = 416
 
     for batch in im_batches:
         #load the image 
         start = time.time()
-        inp_dim = batch[0].size(2)
         if CUDA:
             batch = batch.cuda()
        
@@ -120,13 +132,14 @@ if __name__ ==  '__main__':
         
         prediction = prediction.data
         
-        b = batch[0]
-        cv2.imwrite("f.png", inp_to_image(b))
+#        b = batch[5]
+#        cv2.imwrite()
+        
         
         #Apply offsets to the result predictions
         #Tranform the predictions as described in the YOLO paper
         
-        prediction = predict_transform(prediction, inp_dim, model.anchors, num_classes, CUDA)
+        prediction__ = predict_transform(prediction, 416, model.anchors, num_classes, CUDA)
         
 
         #flatten the prediction vector 
@@ -134,7 +147,10 @@ if __name__ ==  '__main__':
         # Put every proposed box as a row.
         #get the boxes with object confidence > threshold
         
-        prediction_ = confidence_filter(prediction, 0.5)
+        
+        
+        prediction_ = confidence_filter(prediction__, 0.5)
+        
 
         #Convert the cordinates to absolute coordinates
         prediction = pred_corner_coord(prediction_)    
@@ -146,6 +162,7 @@ if __name__ ==  '__main__':
         #But both these operations require looping, hence 
         #clubbing these ops in one loop instead of two. 
         #loops are slower than vectorised operations. 
+        
         prediction = write_results(prediction, num_classes, nms = True, nms_conf = 0.4)
         
         prediction[:,0] += i*batch_size
@@ -157,26 +174,52 @@ if __name__ ==  '__main__':
             write = 1
         else:
             output = torch.cat((output,prediction))
-            
-        
-        
-        
-        
-        
-        
-        #plot them with openCV, and save the files as well
-        
-
 
         
-        
-        #generate the detection image 
-        
+#    im_dim_list = torch.index_select(im_dim_list.cuda(), 0, output[:,0].long())/inp_dim
+#    output[:,1:5] *= im_dim_list
     
-    print(output)
-    inds = output[:,0].long()
-    batch_end_time = time.time()
+    output, im_batches = draw_detections(output.cpu(), im_batches)
+    results = (orig_ims)
+    
+    
+    end = time.time()
 
+classes = load_classes('data/voc.names')
+
+
+def write(x, batches, results):
+    c1 = tuple(x[1:3].int())
+    c2 = tuple(x[3:5].int())
+    img = results[int(x[0])]
+    cls = int(x[-1])
+    label = "Class Conf: {0:.2f} Object conf: {0:.2f}".format(classes[cls], x[5], x[4])
+    color =[0,0,255]
+    cv2.rectangle(img, c1, c2,color, 1)
+    cv2.putText(img, label, (c1), cv2.FONT_HERSHEY_PLAIN, 1, color, 1);
+#    cv2.imwrite("det/fg_{}.png".format(round(time.time(),4)), img)
+    return img
+
+
+def imwrite(x):
+    i = 0
+    
+    while(True):
+        print(i)
+        cv2.imwrite("im_{}.png".format(i), x)
+        i += 1    
+        yield i
+        
+list(map(lambda x: write(x, im_batches, results), output))
+
+for x in results:
+    cv2.imwrite("im_{}.jpg".format(i), x)
+    i += 1
+    
+
+
+print ((end - start)/len(imlist))
+print(1/((end - start)/len(imlist)))
 
 torch.cuda.empty_cache()
         
