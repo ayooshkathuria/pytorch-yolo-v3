@@ -24,7 +24,6 @@ def prep_image(img, network_dim):
     img_ =  img[:,:,::-1].transpose((2,0,1)).copy()
     img_ = torch.from_numpy(img_).float().div(255.0).unsqueeze(0)
 
-    img_ = Variable(img_)
     return img_
 
 def prep_image_pil(img, network_dim):
@@ -34,7 +33,7 @@ def prep_image_pil(img, network_dim):
     img = img.view(*network_dim, 3).transpose(0,1).transpose(0,2).contiguous()
     img = img.view(1, 3,*network_dim)
     img = img.float().div(255.0)
-    return Variable(img)
+    return (img)
 
 def inp_to_image(inp):
     inp = inp.cpu().squeeze()
@@ -65,5 +64,25 @@ def prep_batch(imlist, batch_size, network_dim):
                 batchx.copy_(inp_image.data)
             else:
                 batchx = torch.cat((batchx, inp_image.data))
+        im_batches.append(Variable(batchx, volatile = True))
+    return im_batches
+
+def prep_batch_alt(imlist, batch_size, network_dim):
+    leftover = 0
+    if (len(imlist) % batch_size):
+        leftover = 1
+    num_batches = len(imlist)//batch_size + leftover
+    im_batches = []
+    for batch in range(num_batches):
+        batchx = torch.zeros(batch_size, 3, *network_dim)
+        for img in range(batch_size):
+            id = batch*batch_size + img
+            try:
+                image = imlist[id]
+            except IndexError:
+                batchx = batchx[:,img]
+                break
+            inp_image = prep_image_pil(image, network_dim)
+            batchx[img].view_as(inp_image).copy_(inp_image)
         im_batches.append(Variable(batchx, volatile = True))
     return im_batches
