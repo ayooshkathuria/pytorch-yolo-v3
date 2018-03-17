@@ -9,7 +9,6 @@ import cv2
 import matplotlib.pyplot as plt
 from util import count_parameters as count
 from util import convert2cpu as cpu
-from preprocess import prep_image, prep_batch
 
 class test_net(nn.Module):
     def __init__(self, num_layers, input_size):
