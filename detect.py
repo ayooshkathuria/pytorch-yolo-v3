@@ -186,7 +186,9 @@ if __name__ ==  '__main__':
         else:
             output = torch.cat((output,prediction))
             
-        torch.cuda.synchronize()
+        
+        if CUDA:
+            torch.cuda.synchronize()
     
     
     output_recast = time.time()
