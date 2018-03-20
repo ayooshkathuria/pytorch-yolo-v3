@@ -38,7 +38,7 @@ def get_test_input(input_dim, CUDA):
     
     if CUDA:
         img_ = img_.cuda()
-    
+    num_classes
     return img_
 
 
@@ -185,6 +185,8 @@ if __name__ ==  '__main__':
             write = 1
         else:
             output = torch.cat((output,prediction))
+            
+        torch.cuda.synchronize()
     
     
     output_recast = time.time()
