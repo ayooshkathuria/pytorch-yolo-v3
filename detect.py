@@ -1,5 +1,5 @@
 from __future__ import division
-
+import time
 import torch 
 import torch.nn as nn
 from torch.autograd import Variable
@@ -75,7 +75,6 @@ if __name__ ==  '__main__':
     cfg = args.cfg
     weightsfile = args.weightsfile
     batch_size = int(args.bs)
-    batch_size = 4
     start = 0
 
     CUDA = torch.cuda.is_available()
@@ -89,12 +88,12 @@ if __name__ ==  '__main__':
     model.load_weights(weightsfile)
     print("Network successfully loaded")
     
-    model(get_test_input(inp_dim, CUDA))
     
     #If there's a GPU availible, put the model on GPU
     if CUDA:
         model.cuda()
     
+    model(get_test_input(inp_dim, CUDA))
     #Set the model in evaluation mode
     model.eval()
     
@@ -240,7 +239,7 @@ if __name__ ==  '__main__':
     print("{:20s}: {:2.3f}".format("Output Processing", class_load - output_recast))
     print("{:20s}: {:2.3f}".format("Class Loading", draw - class_load))    
     print("{:20s}: {:2.3f}".format("Drawing Boxes", end - draw))
-    print("{:20s}: {:2.3f}".format("Average time_per_img", (end - start_det_loop)/len(imlist)))
+    print("{:20s}: {:2.3f}".format("Average time_per_img", (end - load_batch)/len(imlist)))
     
     
     
