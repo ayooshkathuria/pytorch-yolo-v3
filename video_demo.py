@@ -1,6 +1,16 @@
-from utils import *
+from __future__ import division
+import time
+import torch 
+import torch.nn as nn
+from torch.autograd import Variable
+import numpy as np
+import cv2 
+from util import *
 from darknet import Darknet
-import cv2
+from preprocess import prep_image, inp_to_image
+import pandas as pd
+import random 
+import pickle as pkl
 
 def get_test_input(input_dim, CUDA):
     img = cv2.imread("dog-cycle-car.png")
@@ -14,3 +24,140 @@ def get_test_input(input_dim, CUDA):
         img_ = img_.cuda()
     
     return img_
+
+def prep_image(img, inp_dim):
+    """
+    Prepare image for inputting to the neural network. 
+    
+    Returns a Variable 
+    """
+
+    orig_im = img
+    dim = orig_im.shape[1], orig_im.shape[0]
+    img = cv2.resize(orig_im, (inp_dim, inp_dim))
+    img_ = img[:,:,::-1].transpose((2,0,1)).copy()
+    img_ = torch.from_numpy(img_).float().div(255.0).unsqueeze(0)
+    return img_, orig_im, dim
+
+def write(x, img):
+    c1 = tuple(x[1:3].int())
+    c2 = tuple(x[3:5].int())
+    cls = int(x[-1])
+    label = "{0}".format(classes[cls])
+    color = random.choice(colors)
+    cv2.rectangle(img, c1, c2,color, 1)
+    t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
+    c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
+    cv2.rectangle(img, c1, c2,color, -1)
+    cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1);
+    return img
+
+if __name__ == '__main__':
+    cfgfile = "cfg/yolo-voc.cfg"
+    weightsfile = "yolo-voc.weights"
+    inp_dim = 416
+    num_classes = 20
+
+    CUDA = torch.cuda.is_available()
+    
+    model = Darknet(cfgfile)
+    model.load_weights("yolo-voc.weights")
+    
+    if CUDA:
+        model.cuda()
+        
+    model(get_test_input(inp_dim, CUDA))
+    #Set the model in evaluation mode
+    model.eval()
+    
+    videofile = 'video.avi'
+    
+    cap = cv2.VideoCapture(videofile)
+    
+    assert cap.isOpened(), 'Cannot capture source'
+    
+    frames = 0
+    start = time.time()    
+    while cap.isOpened():
+        
+        ret, frame = cap.read()
+        if ret:
+            
+            #Get the frame 
+            img = frame
+
+                        
+
+            
+            #Transform the image to the format recognized by the PyTorch
+                                    
+            
+            inp = cv2.resize(img, (inp_dim, inp_dim)) 
+            inp = Variable(torch.FloatTensor(inp)).cuda()
+            inp = inp.view(inp_dim, inp_dim, 3).transpose(0,1).transpose(0,2).contiguous()
+            inp = inp.unsqueeze(0)
+            
+            output = model(inp).data
+            
+            cv2.imshow("frame", frame)
+            cv2.waitKey(1)
+            frames += 1
+            print("FPS of the video is", frames / (time.time() - start))
+            continue
+
+
+            
+      
+            
+            output = predict_transform(output, inp_dim, model.anchors, num_classes, 0.5, CUDA)
+
+
+
+            assert False
+            
+            
+            img = Variable(img)
+            
+            
+            
+            
+            im_dim = torch.FloatTensor(dim).repeat(1,2)
+            
+            if CUDA:
+                img = img.cuda()
+                im_dim = im_dim.cuda()
+            
+            
+            output = model(img).data
+            output = predict_transform(output, inp_dim, model.anchors, num_classes, 0.5, CUDA)
+            
+            if type(output) == int:
+                continue
+            
+            output = write_results(output, num_classes, nms = True, nms_conf = 0.4)
+        
+            output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
+            
+            im_dim = im_dim.repeat(output.size(0), 1)/inp_dim
+            output[:,1:5] *= im_dim
+            
+            classes = load_classes('data/voc.names')
+            colors = pkl.load(open("pallete", "rb"))
+            
+            list(map(lambda x: write(x, orig_im), output))
+            
+            cv2.imshow("frame", orig_im)
+
+            
+
+            key = cv2.waitKey(1)
+            if key & 0xFF == ord('q'):
+                break
+            
+        else:
+            break
+    
+
+    
+    
+
