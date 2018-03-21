@@ -206,4 +206,64 @@ def write_results(prediction, num_classes, nms = True, nms_conf = 0.4):
     
     return output
 
+def box_indexer(x, num_anchors, grid_size):
+    x = x.long()
+    anchor = x % num_anchors
+    x = x / num_anchors
+    x_ind = x % grid_size
+    y_ind = x / grid_size
+    
+    return (x_ind.half(), y_ind.half(), anchor.half())
 
+def predict_transform_demo(prediction, inp_dim, anchors, num_classes, confidence = 0.5, CUDA = True):
+    prediction = prediction[0]
+    network_stride = 32
+    grid_size = inp_dim // network_stride
+    bbox_attrs = 5 + num_classes
+    num_anchors = len(anchors)
+    prediction = prediction.view(bbox_attrs*num_anchors, grid_size*grid_size)
+    prediction = prediction.transpose(0,1).contiguous()
+    prediction = prediction.view(grid_size*grid_size*num_anchors, bbox_attrs)
+    
+
+#    box_ind = torch.arange(0, num_anchors*grid_size*grid_size).unsqueeze(1).half().cuda()
+#    
+#    prediction = torch.cat((box_ind, prediction), 1)
+#    
+    
+    prediction[:, 4] = torch.sigmoid(prediction[:, 4])
+    
+    conf_mask = (prediction[:,4] > confidence).half().unsqueeze(1)
+    
+
+    prediction = prediction*conf_mask
+
+    
+    non_zero_indexes = torch.nonzero(prediction[:,4])
+
+    try:
+        prediction = prediction[non_zero_indexes.squeeze(),]
+    except:
+        return 0
+    
+    prediction[:, [0,1]] = torch.sigmoid(prediction[:, [0,1]])
+    
+    x_ind, y_ind, anchor_id = box_indexer(non_zero_indexes, num_anchors, grid_size)
+        
+    prediction[:,[0]] += x_ind.unsqueeze(1)
+    prediction[:,[1]] += y_ind.unsqueeze(1)
+    
+    anchors = torch.HalfTensor(anchors)
+
+    anchors = torch.index_select(anchors.float().cuda(), 0, anchor_id.long().squeeze()).half()
+    
+    
+    prediction[:,[2,3]] = torch.exp(prediction[:,[2,3]])*anchors
+
+    max_class_id = torch.max(prediction[:, 5: 5 + num_classes], 1)[1].view(-1,1).half()
+    
+    
+    prediction = torch.cat((prediction[:,:5], max_class_id), 1)/grid_size
+    
+    
+    return prediction
