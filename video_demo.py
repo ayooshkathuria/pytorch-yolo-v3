@@ -60,8 +60,14 @@ if __name__ == '__main__':
 
     CUDA = torch.cuda.is_available()
     
+    bbox_attrs = 5 + num_classes
+    
     model = Darknet(cfgfile)
     model.load_weights("yolo-voc.weights")
+    num_anchors = len(model.anchors)
+
+    
+    
     
     if CUDA:
         model.cuda()
@@ -84,57 +90,50 @@ if __name__ == '__main__':
         if ret:
             
             #Get the frame 
-            img = frame
-
-                        
-
+            img, orig_im, dim = prep_image(frame, inp_dim)
+            
             
             #Transform the image to the format recognized by the PyTorch
-                                    
+            im_dim = torch.FloatTensor(dim).repeat(1,2)                        
             
-            inp = cv2.resize(img, (inp_dim, inp_dim)) 
-            inp = Variable(torch.FloatTensor(inp)).cuda()
-            inp = inp.view(inp_dim, inp_dim, 3).transpose(0,1).transpose(0,2).contiguous()
-            inp = inp.unsqueeze(0)
-            
-            output = model(inp).data
-            
-            cv2.imshow("frame", frame)
-            cv2.waitKey(1)
-            frames += 1
-            print("FPS of the video is", frames / (time.time() - start))
-            continue
-
-
-            
-      
-            
-            output = predict_transform(output, inp_dim, model.anchors, num_classes, 0.5, CUDA)
-
-
-
-            assert False
-            
-            
-            img = Variable(img)
-            
-            
-            
-            
-            im_dim = torch.FloatTensor(dim).repeat(1,2)
             
             if CUDA:
                 img = img.cuda()
                 im_dim = im_dim.cuda()
             
             
-            output = model(img).data
-            output = predict_transform(output, inp_dim, model.anchors, num_classes, 0.5, CUDA)
+            output = model(Variable(img, volatile = True)).data
+            output_ = predict_transform(output, inp_dim, model.anchors, num_classes, 0.25, CUDA)
             
-            if type(output) == int:
+#            cv2.imshow("frame", frame)
+#            cv2.waitKey(1)
+#            frames += 1
+#            print("FPS of the video is", frames / (time.time() - start))
+#            continue
+#
+#
+#            assert False
+#            
+#            
+#            img = Variable(img)
+#            
+#            
+#            
+#            
+#            im_dim = torch.FloatTensor(dim).repeat(1,2)
+#            
+#            if CUDA:
+#                img = img.cuda()
+#                im_dim = im_dim.cuda()
+#            
+#            
+#            output = model(img).data
+#            output = predict_transform(output, inp_dim, model.anchors, num_classes, 0.5, CUDA)
+#            
+            if type(output_) == int:
                 continue
             
-            output = write_results(output, num_classes, nms = True, nms_conf = 0.4)
+            output = write_results(output_, num_classes, nms = True, nms_conf = 0.4)
         
             output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
             
@@ -149,7 +148,8 @@ if __name__ == '__main__':
             cv2.imshow("frame", orig_im)
 
             
-
+            frames += 1
+            print("FPS of the video is", frames / (time.time() - start))
             key = cv2.waitKey(1)
             if key & 0xFF == ord('q'):
                 break
