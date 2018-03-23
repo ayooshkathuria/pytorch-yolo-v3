@@ -67,13 +67,11 @@ if __name__ == '__main__':
     num_anchors = len(model.anchors)
 
     
-    
-    
     if CUDA:
         model.cuda()
         
     model(get_test_input(inp_dim, CUDA))
-    #Set the model in evaluation mode
+
     model.eval()
     
     videofile = 'video.avi'
@@ -89,51 +87,34 @@ if __name__ == '__main__':
         ret, frame = cap.read()
         if ret:
             
-            #Get the frame 
+
             img, orig_im, dim = prep_image(frame, inp_dim)
             
-            
-            #Transform the image to the format recognized by the PyTorch
             im_dim = torch.FloatTensor(dim).repeat(1,2)                        
             
             
             if CUDA:
-                img = img.cuda()
                 im_dim = im_dim.cuda()
             
             
             output = model(Variable(img, volatile = True)).data
-            output_ = predict_transform(output, inp_dim, model.anchors, num_classes, 0.25, CUDA)
-            
-#            cv2.imshow("frame", frame)
-#            cv2.waitKey(1)
-#            frames += 1
-#            print("FPS of the video is", frames / (time.time() - start))
-#            continue
-#
-#
-#            assert False
-#            
-#            
-#            img = Variable(img)
-#            
-#            
-#            
-#            
-#            im_dim = torch.FloatTensor(dim).repeat(1,2)
-#            
-#            if CUDA:
-#                img = img.cuda()
-#                im_dim = im_dim.cuda()
-#            
-#            
-#            output = model(img).data
-#            output = predict_transform(output, inp_dim, model.anchors, num_classes, 0.5, CUDA)
-#            
-            if type(output_) == int:
+            output = predict_transform(output, inp_dim, model.anchors, num_classes, 0.25, CUDA)
+           
+            if type(output) == int:
+                frames += 1
+                print("FPS of the video is {:5.2f}".format( frames / (time.time() - start)))
+                cv2.imshow("frame", orig_im)
+                key = cv2.waitKey(1)
+                if key & 0xFF == ord('q'):
+                    break
                 continue
             
-            output = write_results(output_, num_classes, nms = True, nms_conf = 0.4)
+            output = output.float()
+            
+            if CUDA:
+                write_results = write_results_half
+            
+            output = write_results(output, num_classes, nms = True, nms_conf = 0.4)
         
             output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
             
@@ -145,14 +126,14 @@ if __name__ == '__main__':
             
             list(map(lambda x: write(x, orig_im), output))
             
-            cv2.imshow("frame", orig_im)
-
             
-            frames += 1
-            print("FPS of the video is", frames / (time.time() - start))
+            cv2.imshow("frame", orig_im)
             key = cv2.waitKey(1)
             if key & 0xFF == ord('q'):
                 break
+            frames += 1
+            print("FPS of the video is {:5.2f}".format( frames / (time.time() - start)))
+
             
         else:
             break
