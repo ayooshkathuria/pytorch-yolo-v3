@@ -118,7 +118,7 @@ if __name__ == '__main__':
         
             output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
             
-            im_dim = im_dim.repeat(output.size(0), 1)/inp_dim
+            im_dim = im_dim.repeat(output.size(0), 1)
             output[:,1:5] *= im_dim
             
             classes = load_classes('data/voc.names')

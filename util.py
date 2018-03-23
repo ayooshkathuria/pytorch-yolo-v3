@@ -67,7 +67,7 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, confidence = 0.
     #Softmax the class scores
     prediction[:,:,5: 5 + num_classes] = nn.Softmax(-1)(Variable(prediction[:,:, 5 : 5 + num_classes])).data
 
-    prediction[:,:,:4] *= 32
+    prediction[:,:,:4] /= grid_size
     
     conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
     prediction = prediction*conf_mask
