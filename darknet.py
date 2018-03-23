@@ -75,7 +75,7 @@ class MaxPoolStride1(nn.Module):
     
     def forward(self, x):
         padded_x = F.pad(x, (0, self.pad, 0, self.pad), mode = "replicate")
-        pooled_x = F.max_pool2d(padded_x, self.kernel_size, padding = self.padding)
+        pooled_x = F.max_pool2d(padded_x, self.kernel_size, padding = self.pad)
         return pooled_x
 
 class RouteLayer(nn.Module):
@@ -241,7 +241,7 @@ class Darknet(nn.Module):
     def forward(self, x):
         outputs = {}   #We cache the outputs for the route layer
         
-        for i in range(len(self.module_list)):
+        for i in range(len(self.module_list)):        
             module_type = (self.blocks[i + 1]["type"])
             if module_type == "convolutional" or module_type == "maxpool" or module_type=="reorg":
                 x = self.module_list[i](x)
@@ -256,8 +256,7 @@ class Darknet(nn.Module):
                     end = outputs[i + int(layers[1])]
                     x = torch.cat((start, end), 1)
                 outputs[i] = x
-         
-     
+
         return x
     
 

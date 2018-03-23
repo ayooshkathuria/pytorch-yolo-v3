@@ -22,12 +22,12 @@ def convert2cpu(matrix):
     else:
         return matrix
 
-def predict_transform(prediction, inp_dim, anchors, num_classes, confidence = 0.5, CUDA = True):
+def predict_transform(prediction, inp_dim, stride, anchors, num_classes, confidence = 0.5, CUDA = True):
     batch_size = prediction.size(0)
-    network_stride = 32
-    grid_size = inp_dim // network_stride
+    grid_size = inp_dim // stride
     bbox_attrs = 5 + num_classes
     num_anchors = len(anchors)
+    
     
     prediction = prediction.view(batch_size, bbox_attrs*num_anchors, grid_size*grid_size)
     prediction = prediction.transpose(1,2).contiguous()
@@ -214,12 +214,12 @@ Created on Sat Mar 24 00:12:16 2018
 @author: ayooshmac
 """
 
-def predict_transform_half(prediction, inp_dim, anchors, num_classes, confidence = 0.5, CUDA = True):
+def predict_transform_half(prediction, inp_dim, stride, anchors, num_classes, confidence = 0.5, CUDA = True):
     batch_size = prediction.size(0)
-    network_stride = 32
-    grid_size = inp_dim // network_stride
     bbox_attrs = 5 + num_classes
     num_anchors = len(anchors)
+    grid_size = inp_dim // stride
+
     
     prediction = prediction.view(batch_size, bbox_attrs*num_anchors, grid_size*grid_size)
     prediction = prediction.transpose(1,2).contiguous()

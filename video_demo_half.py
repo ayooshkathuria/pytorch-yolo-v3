@@ -57,6 +57,7 @@ if __name__ == '__main__':
     weightsfile = "yolo-voc.weights"
     inp_dim = 416
     num_classes = 20
+    stride = 32
 
     CUDA = torch.cuda.is_available()
     
@@ -101,7 +102,7 @@ if __name__ == '__main__':
             
             
             output = model(Variable(img, volatile = True)).data
-            output = predict_transform(output, inp_dim, model.anchors, num_classes, 0.25, CUDA)
+            output = predict_transform(output, inp_dim, stride, model.anchors, num_classes, 0.25, CUDA)
            
             if type(output) == int:
                 frames += 1

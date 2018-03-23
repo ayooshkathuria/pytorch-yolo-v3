@@ -13,7 +13,7 @@ import random
 import pickle as pkl
 
 def get_test_input(input_dim, CUDA):
-    img = cv2.imread("dog-cycle-car.png")
+    img = cv2.imread("imgs/messi.jpg")
     img = cv2.resize(img, (input_dim, input_dim)) 
     img_ =  img[:,:,::-1].transpose((2,0,1))
     img_ = img_[np.newaxis,:,:,:]/255.0
@@ -53,31 +53,31 @@ def write(x, img):
     return img
 
 if __name__ == '__main__':
-    cfgfile = "cfg/yolo-voc.cfg"
-    weightsfile = "yolo-voc.weights"
+    cfgfile = "cfg/tiny-yolo-voc.cfg"
+    weightsfile = "tiny-yolo-voc.weights"
     inp_dim = 416
-    stride = 32
     num_classes = 20
+    stride = 52
 
     CUDA = torch.cuda.is_available()
     
     bbox_attrs = 5 + num_classes
     
     model = Darknet(cfgfile)
-    model.load_weights("yolo-voc.weights")
+    model.load_weights(weightsfile)
     num_anchors = len(model.anchors)
 
     
     if CUDA:
         model.cuda()
         
-    model(get_test_input(inp_dim, CUDA))
-
+#    a = model(get_test_input(inp_dim, CUDA))
+    
     model.eval()
     
     videofile = 'video.avi'
     
-    cap = cv2.VideoCapture(videofile)
+    cap = cv2.VideoCapture(0)
     
     assert cap.isOpened(), 'Cannot capture source'
     
@@ -88,17 +88,16 @@ if __name__ == '__main__':
         ret, frame = cap.read()
         if ret:
             
-
             img, orig_im, dim = prep_image(frame, inp_dim)
             
-            im_dim = torch.FloatTensor(dim).repeat(1,2)                        
+#            im_dim = torch.FloatTensor(dim).repeat(1,2)                        
             
             
             if CUDA:
                 im_dim = im_dim.cuda()
             
             
-            output = model(Variable(img, volatile = True)).data
+            output = model(Variable(img)).data
             output = predict_transform(output, inp_dim, stride, model.anchors, num_classes, 0.25, CUDA)
            
             if type(output) == int:
@@ -110,17 +109,16 @@ if __name__ == '__main__':
                     break
                 continue
             
-            output = output.float()
-            
-            if CUDA:
-                write_results = write_results_half
+
             
             output = write_results(output, num_classes, nms = True, nms_conf = 0.4)
         
             output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
             
-            im_dim = im_dim.repeat(output.size(0), 1)
-            output[:,1:5] *= im_dim
+#            im_dim = im_dim.repeat(output.size(0), 1)
+            output[:,[1,3]] *= frame.shape[1]
+            output[:,[2,4]] *= frame.shape[0]
+
             
             classes = load_classes('data/voc.names')
             colors = pkl.load(open("pallete", "rb"))

@@ -60,6 +60,9 @@ def arg_parse():
     parser.add_argument("--weightsfile", dest = "weightsfile", help = "Weights file for the network",
                         default = "yolo-voc.weights")
     parser.add_argument("--bs", dest = "bs", help = "Batch size", default = 1)
+    parser.add_argument("--dataset", dest = "dataset", help = "Dataset on which the network has been trained", default = "pascal")
+    
+    
     
     
     
@@ -79,8 +82,21 @@ if __name__ ==  '__main__':
 
     CUDA = torch.cuda.is_available()
     network_dim = (416,416)
-    inp_dim = 416
-    num_classes  = 20   #Will be updated in future to accomodate COCO
+    if args.dataset == "pascal":
+        inp_dim = 416
+        num_classes = 20
+        classes = load_classes('data/voc.names')
+    
+    elif args.dataset == "coco":
+        inp_dim = 544
+        num_classes = 80
+        classes = load_classes('data/coco.names')    
+
+        
+        
+        
+        
+    stride = 32
 
     #Set up the neural network
     print("Loading network.....")
@@ -157,7 +173,7 @@ if __name__ ==  '__main__':
         #get the boxes with object confidence > threshold
         #Convert the cordinates to absolute coordinates
         
-        prediction = predict_transform(prediction, inp_dim, model.anchors, num_classes, 0.25, CUDA)
+        prediction = predict_transform(prediction, inp_dim, stride, model.anchors, num_classes, 0.25, CUDA)
         
             
         if type(prediction) == int:
@@ -202,7 +218,6 @@ if __name__ ==  '__main__':
     class_load = time.time()
 
     
-    classes = load_classes('data/voc.names')
     
     colors = pkl.load(open("pallete", "rb"))
     
