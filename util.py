@@ -206,3 +206,176 @@ def write_results(prediction, num_classes, nms = True, nms_conf = 0.4):
     
     return output
 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Mar 24 00:12:16 2018
+
+@author: ayooshmac
+"""
+
+def predict_transform_half(prediction, inp_dim, anchors, num_classes, confidence = 0.5, CUDA = True):
+    batch_size = prediction.size(0)
+    network_stride = 32
+    grid_size = inp_dim // network_stride
+    bbox_attrs = 5 + num_classes
+    num_anchors = len(anchors)
+    
+    prediction = prediction.view(batch_size, bbox_attrs*num_anchors, grid_size*grid_size)
+    prediction = prediction.transpose(1,2).contiguous()
+    prediction = prediction.view(batch_size, grid_size*grid_size*num_anchors, bbox_attrs)
+    
+    
+    #Sigmoid the  centre_X, centre_Y. and object confidencce
+    prediction[:,:,0] = torch.sigmoid(prediction[:,:,0])
+    prediction[:,:,1] = torch.sigmoid(prediction[:,:,1])
+    prediction[:,:,4] = torch.sigmoid(prediction[:,:,4])
+
+    
+    #Add the center offsets
+    grid_len = np.arange(grid_size)
+    a,b = np.meshgrid(grid_len, grid_len)
+    
+    x_offset = torch.FloatTensor(a).view(-1,1)
+    y_offset = torch.FloatTensor(b).view(-1,1)
+    
+    if CUDA:
+        x_offset = x_offset.cuda().half()
+        y_offset = y_offset.cuda().half()
+    
+    x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,num_anchors).view(-1,2).unsqueeze(0)
+    
+    prediction[:,:,:2] += x_y_offset
+      
+    #log space transform height and the width
+    anchors = torch.HalfTensor(anchors)
+    
+    if CUDA:
+        anchors = anchors.cuda()
+    
+    anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
+    prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
+
+    #Softmax the class scores
+    prediction[:,:,5: 5 + num_classes] = nn.Softmax(-1)(Variable(prediction[:,:, 5 : 5 + num_classes])).data
+
+    prediction[:,:,:4] *= 32
+    
+    conf_mask = (prediction[:,:,4] > confidence).half().unsqueeze(2)
+    prediction = prediction*conf_mask
+    
+    try:
+        ind_nz = torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()
+    except:
+        return 0
+
+    
+    box = prediction[ind_nz[0], ind_nz[1]]
+    
+    
+    box_a = box.new(box.shape)
+    box_a[:,0] = (box[:,0] - box[:,2]/2)
+    box_a[:,1] = (box[:,1] - box[:,3]/2)
+    box_a[:,2] = (box[:,0] + box[:,2]/2) 
+    box_a[:,3] = (box[:,1] + box[:,3]/2)
+    box[:,:4] = box_a[:,:4]
+    
+    prediction[ind_nz[0], ind_nz[1]] = box
+    
+    conf_mask = (prediction[:,:,4] > confidence).half().unsqueeze(2)
+    prediction = prediction*conf_mask    
+    
+    return prediction
+
+
+def write_results_half(prediction, num_classes, nms = True, nms_conf = 0.4):
+    
+    batch_size = prediction.size(0)
+    
+    output = prediction.new(1, prediction.size(2) + 1)
+    write = False
+    
+    for ind in range(batch_size):
+        #select the image from the batch
+        image_pred = prediction[ind]
+
+        
+        #Get the class having maximum score, and the index of that class
+        #Get rid of num_classes softmax scores 
+        #Add the class index and the class score of class having maximum score
+        max_conf, max_conf_score = torch.max(image_pred[:,5:5+ num_classes], 1)
+        max_conf = max_conf.half().unsqueeze(1)
+        max_conf_score = max_conf_score.half().unsqueeze(1)
+        seq = (image_pred[:,:5], max_conf, max_conf_score)
+        image_pred = torch.cat(seq, 1)
+        
+        
+        #Get rid of the zero entries
+        non_zero_ind =  (torch.nonzero(image_pred[:,4]))
+        try:
+            image_pred_ = image_pred[non_zero_ind.squeeze(),:]
+        except:
+            return 0
+        
+        #Get the various classes detected in the image
+        img_classes = unique(image_pred_[:,-1].long()).half()
+        
+        
+        
+                
+        #WE will do NMS classwise
+        for cls in img_classes:
+            #get the detections with one particular class
+            cls_mask = image_pred_*(image_pred_[:,-1] == cls).half().unsqueeze(1)
+            class_mask_ind = torch.nonzero(cls_mask[:,-2]).squeeze()
+            
+
+            image_pred_class = image_pred_[class_mask_ind]
+
+        
+             #sort the detections such that the entry with the maximum objectness
+             #confidence is at the top
+            conf_sort_index = torch.sort(image_pred_class[:,4], descending = True )[1]
+            image_pred_class = image_pred_class[conf_sort_index]
+            idx = image_pred_class.size(0)
+            
+            #if nms has to be done
+            if nms:
+                #For each detection
+                for i in range(idx):
+                    #Get the IOUs of all boxes that come after the one we are looking at 
+                    #in the loop
+                    try:
+                        ious = bbox_iou(image_pred_class[i].unsqueeze(0), image_pred_class[i+1:])
+                    except ValueError:
+                        break
+        
+                    except IndexError:
+                        break
+                    
+                    #Zero out all the detections that have IoU > treshhold
+                    iou_mask = (ious < nms_conf).half().unsqueeze(1)
+                    image_pred_class[i+1:] *= iou_mask       
+                    
+                    #Remove the non-zero entries
+                    non_zero_ind = torch.nonzero(image_pred_class[:,4]).squeeze()
+                    image_pred_class = image_pred_class[non_zero_ind]
+                    
+                    
+            
+            #Concatenate the batch_id of the image to the detection
+            #this helps us identify which image does the detection correspond to 
+            #We use a linear straucture to hold ALL the detections from the batch
+            #the batch_dim is flattened
+            #batch is identified by extra batch column
+            batch_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(ind)
+            seq = batch_ind, image_pred_class
+            
+            if not write:
+                output = torch.cat(seq,1)
+                write = True
+            else:
+                out = torch.cat(seq,1)
+                output = torch.cat((output,out))
+    
+    return output
