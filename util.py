@@ -141,7 +141,7 @@ def write_results(prediction, num_classes, nms = True, nms_conf = 0.4):
         try:
             image_pred_ = image_pred[non_zero_ind.squeeze(),:]
         except:
-            return 0
+            continue
         
         #Get the various classes detected in the image
         img_classes = unique(image_pred_[:,-1])
@@ -315,7 +315,7 @@ def write_results_half(prediction, num_classes, nms = True, nms_conf = 0.4):
         try:
             image_pred_ = image_pred[non_zero_ind.squeeze(),:]
         except:
-            return 0
+            continue
         
         #Get the various classes detected in the image
         img_classes = unique(image_pred_[:,-1].long()).half()
