@@ -53,54 +53,54 @@ def arg_parse():
     parser = argparse.ArgumentParser(description='YOLO v2 Detection Module')
    
     parser.add_argument("--images", dest = 'images', help = 
-                        "Image / Directory containing images to perform detectio upon",
+                        "Image / Directory containing images to perform detection upon",
                         default = "imgs", type = str)
-    parser.add_argument("--cfg", dest = "cfg", help = "Configuration file to build the neural network",
-                        default = "cfg/yolo-voc.cfg")
-    parser.add_argument("--weightsfile", dest = "weightsfile", help = "Weights file for the network",
-                        default = "yolo-voc.weights")
+    parser.add_argument("--det", dest = 'det', help = 
+                        "Image / Directory to store detections to",
+                        default = "det", type = str)
     parser.add_argument("--bs", dest = "bs", help = "Batch size", default = 1)
     parser.add_argument("--dataset", dest = "dataset", help = "Dataset on which the network has been trained", default = "pascal")
-    
-    
-    
-    
-    
+    parser.add_argument("--confidence", dest = "confidence", help = "Object Confidence to filter predictions", default = 0.5)
+    parser.add_argument("--nms_thresh", dest = "nms_thresh", help = "NMS Threshhold", default = 0.4)
 
-    
-    
     return parser.parse_args()
 
 
 if __name__ ==  '__main__':
     args = arg_parse()
     images = args.images
-    cfg = args.cfg
-    weightsfile = args.weightsfile
     batch_size = int(args.bs)
+    confidence = float(args.confidence)
+    nms_thesh = float(args.nms_thresh)
     start = 0
 
     CUDA = torch.cuda.is_available()
-    network_dim = (416,416)
+    
     if args.dataset == "pascal":
         inp_dim = 416
         num_classes = 20
         classes = load_classes('data/voc.names')
+        weightsfile = 'yolo-voc.weights'
+        cfgfile = "cfg/yolo-voc.cfg"
+
     
     elif args.dataset == "coco":
         inp_dim = 544
         num_classes = 80
-        classes = load_classes('data/coco.names')    
+        classes = load_classes('data/coco.names')
+        weightsfile = 'yolo.weights'
+        cfgfile = "cfg/yolo.cfg" 
+        
+    else: 
+        print("Invalid dataset")
+        exit()
 
-        
-        
-        
         
     stride = 32
 
     #Set up the neural network
     print("Loading network.....")
-    model = Darknet(cfg)
+    model = Darknet(cfgfile)
     model.load_weights(weightsfile)
     print("Network successfully loaded")
     
@@ -143,7 +143,8 @@ if __name__ ==  '__main__':
         
     if batch_size != 1:
         num_batches = len(imlist) // batch_size + leftover            
-        im_batches = [torch.cat((im_batches[i*batch_size : min((i +  1)*batch_size, len(im_batches))]))  for i in range(num_batches)]        
+        im_batches = [torch.cat((im_batches[i*batch_size : min((i +  1)*batch_size,
+                            len(im_batches))]))  for i in range(num_batches)]        
 
 
     i = 0
@@ -173,7 +174,7 @@ if __name__ ==  '__main__':
         #get the boxes with object confidence > threshold
         #Convert the cordinates to absolute coordinates
         
-        prediction = predict_transform(prediction, inp_dim, stride, model.anchors, num_classes, 0.25, CUDA)
+        prediction = predict_transform(prediction, inp_dim, stride, model.anchors, num_classes, confidence, CUDA)
         
             
         if type(prediction) == int:
@@ -186,14 +187,20 @@ if __name__ ==  '__main__':
         #clubbing these ops in one loop instead of two. 
         #loops are slower than vectorised operations. 
         
-        prediction = write_results(prediction, num_classes, nms = True, nms_conf = 0.4)
-    
+        prediction = write_results(prediction, num_classes, nms = True, nms_conf = nms_thesh)
+        
+        
         end = time.time()
         
-        print(end - start)
-        
+                    
+#        print(end - start)
+
+            
+
         prediction[:,0] += i*batch_size
-        i += 1
+        
+    
+            
         
           
         if not write:
@@ -202,6 +209,15 @@ if __name__ ==  '__main__':
         else:
             output = torch.cat((output,prediction))
             
+
+        for image in imlist[i*batch_size: min((i +  1)*batch_size, len(imlist))]:
+            im_id = imlist.index(image)
+            objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
+            print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
+            print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
+            print("----------------------------------------------------------")
+        i += 1
+
         
         if CUDA:
             torch.cuda.synchronize()
@@ -214,13 +230,9 @@ if __name__ ==  '__main__':
     output[:,1:5] *= im_dim_list
     
     
-    
     class_load = time.time()
 
-    
-    
     colors = pkl.load(open("pallete", "rb"))
-    
     
     
     draw = time.time()
@@ -243,26 +255,25 @@ if __name__ ==  '__main__':
             
     list(map(lambda x: write(x, im_batches, orig_ims), output))
       
-    
-    det_names = pd.Series(imlist).apply(lambda x: "det/det_{}".format(x.split("/")[-1]))
+    det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
     
     list(map(cv2.imwrite, det_names, orig_ims))
     
     end = time.time()
     
-    
-    
-    print("{:20s}: {:2.3f}".format("Reading addresses", load_batch - read_dir))
-    print("{:20s}: {:2.3f}".format("Loading batch", start_det_loop - load_batch))
-    print("{:20s}: {:2.3f}".format("Det Loop", output_recast - start_det_loop))
-    print("{:20s}: {:2.3f}".format("Output Processing", class_load - output_recast))
-    print("{:20s}: {:2.3f}".format("Class Loading", draw - class_load))    
-    print("{:20s}: {:2.3f}".format("Drawing Boxes", end - draw))
-    print("{:20s}: {:2.3f}".format("Average time_per_img", (end - load_batch)/len(imlist)))
-    
-    
-    
-    
+    print()
+    print("SUMMARY")
+    print("----------------------------------------------------------")
+    print("{:25s}: {}".format("Task", "Time Taken (in seconds)"))
+    print()
+    print("{:25s}: {:2.3f}".format("Reading addresses", load_batch - read_dir))
+    print("{:25s}: {:2.3f}".format("Loading batch", start_det_loop - load_batch))
+    print("{:25s}: {:2.3f}".format("Detection (" + str(len(imlist)) +  " images)", output_recast - start_det_loop))
+    print("{:25s}: {:2.3f}".format("Output Processing", class_load - output_recast))
+    print("{:25s}: {:2.3f}".format("Drawing Boxes", end - draw))
+    print("{:25s}: {:2.3f}".format("Average time_per_img", (end - load_batch)/len(imlist)))
+    print("----------------------------------------------------------")
+
     
     torch.cuda.empty_cache()
         
