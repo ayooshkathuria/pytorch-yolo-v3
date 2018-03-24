@@ -8,6 +8,15 @@ document it as well as I can.
 
 As of now, the code only contains the detection module, but you should expect the training module soon. :) 
 
+## Requirements
+1. Python 3.5
+2. OpenCV
+3. PyTorch 0.3+
+
+
+## Detection Example
+
+![Detection Exaple](https://github.com/ayooshkathuria/PyTorch-YOLO-v2/raw/master/det_messi.jpg)
 ## Running the detector
 
 ### On single or multiple images
