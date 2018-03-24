@@ -1,7 +1,6 @@
 # A PyTorch implementation of a YOLO v2 Object Detector
 
-This repository contains code for a object detector based on [YOLO v2](https://arxiv.org/pdf/1612.08242.pdf), implemented
-in PyTorch. The code is based on the official code of [YOLO v2](https://github.com/pjreddie/darknet), as well as PyTorch 
+This repository contains code for a object detector based on [YOLO9000: Better, Faster, Stronger](https://arxiv.org/pdf/1612.08242.pdf), implementedin PyTorch. The code is based on the official code of [YOLO v2](https://github.com/pjreddie/darknet), as well as a PyTorch 
 port of the original code, by [marvis](https://github.com/marvis/pytorch-yolo2). One of the goals of this code is to improve
 upon the original port by removing redundant parts of the code (The official code is basically a fully blown deep learning 
 library, and includes stuff like sequence models, which are not used in YOLO). I've also tried to keep the code minimal, and 
@@ -60,6 +59,6 @@ python cam_demo.py
 ```
 You can easily tweak the code to use different weightsfiles, available at [yolo website](https://pjreddie.com/darknet/yolo/)
 
-##Coming Soon
+## Coming Soon
 
-Training module should arrive soon.
+Training module should arrive soon. 
