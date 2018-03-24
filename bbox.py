@@ -64,11 +64,11 @@ def bbox_iou(box1, box2):
     inter_rect_y2 =  torch.min(b1_y2, b2_y2)
     
     #Intersection area
-    inter_area = (inter_rect_x2 - inter_rect_x1)*(inter_rect_y2 - inter_rect_y1 + 1)
+    inter_area = (inter_rect_x2 - inter_rect_x1 + 1)*(inter_rect_y2 - inter_rect_y1 + 1)
     
     #Union Area
-    b1_area = (b1_x2 - b1_x1 + 1)*(b1_y2 - b1_y1)
-    b2_area = (b2_x2 - b2_x1 + 1)*(b2_y2 - b2_y1)
+    b1_area = (b1_x2 - b1_x1 + 1)*(b1_y2 - b1_y1 + 1)
+    b2_area = (b2_x2 - b2_x1 + 1)*(b2_y2 - b2_y1 + 1)
     
     iou = inter_area / (b1_area + b2_area - inter_area)
     
@@ -96,3 +96,16 @@ def pred_corner_coord(prediction):
 
 
 
+def write(x, batches, results):
+    c1 = tuple(x[1:3].int())
+    c2 = tuple(x[3:5].int())
+    img = results[int(x[0])]
+    cls = int(x[-1])
+    label = "{0}".format(classes[cls])
+    color = random.choice(colors)
+    cv2.rectangle(img, c1, c2,color, 1)
+    t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
+    c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
+    cv2.rectangle(img, c1, c2,color, -1)
+    cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1);
+    return img
