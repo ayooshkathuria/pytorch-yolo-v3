@@ -11,6 +11,7 @@ from preprocess import prep_image, inp_to_image
 import pandas as pd
 import random 
 import pickle as pkl
+import argparse
 
 def get_test_input(input_dim, CUDA):
     img = cv2.imread("dog-cycle-car.png")
@@ -52,19 +53,63 @@ def write(x, img):
     cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1);
     return img
 
+def arg_parse():
+    """
+    Parse arguements to the detect module
+    
+    """
+    
+    
+    parser = argparse.ArgumentParser(description='YOLO v2 Video Detection Module')
+   
+    parser.add_argument("--video", dest = 'video', help = 
+                        "Video to run detection upon",
+                        default = "video.avi", type = str)
+    parser.add_argument("--dataset", dest = "dataset", help = "Dataset on which the network has been trained", default = "pascal")
+    parser.add_argument("--confidence", dest = "confidence", help = "Object Confidence to filter predictions", default = 0.5)
+    parser.add_argument("--nms_thresh", dest = "nms_thresh", help = "NMS Threshhold", default = 0.4)
+
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
-    cfgfile = "cfg/yolo-voc.cfg"
-    weightsfile = "yolo-voc.weights"
-    inp_dim = 416
-    num_classes = 20
+    args = arg_parse()
+    confidence = float(args.confidence)
+    nms_thesh = float(args.nms_thresh)
+    start = 0
+
+    CUDA = torch.cuda.is_available()
+    
+    if args.dataset == "pascal":
+        inp_dim = 416
+        num_classes = 20
+        classes = load_classes('data/voc.names')
+        weightsfile = 'yolo-voc.weights'
+        cfgfile = "cfg/yolo-voc.cfg"
+
+    
+    elif args.dataset == "coco":
+        inp_dim = 544
+        num_classes = 80
+        classes = load_classes('data/coco.names')
+        weightsfile = 'yolo.weights'
+        cfgfile = "cfg/yolo.cfg" 
+        
+    else: 
+        print("Invalid dataset")
+        exit()
+
+        
     stride = 32
 
     CUDA = torch.cuda.is_available()
     
     bbox_attrs = 5 + num_classes
     
+    print("Loading network.....")
     model = Darknet(cfgfile)
-    model.load_weights("yolo-voc.weights")
+    model.load_weights(weightsfile)
+    print("Network successfully loaded")
     num_anchors = len(model.anchors)
 
     

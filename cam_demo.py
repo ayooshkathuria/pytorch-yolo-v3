@@ -10,6 +10,7 @@ from darknet import Darknet
 from preprocess import prep_image, inp_to_image
 import pandas as pd
 import random 
+import argparse
 import pickle as pkl
 
 def get_test_input(input_dim, CUDA):
@@ -52,6 +53,21 @@ def write(x, img):
     cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1);
     return img
 
+def arg_parse():
+    """
+    Parse arguements to the detect module
+    
+    """
+    
+    
+    parser = argparse.ArgumentParser(description='YOLO v2 Cam Demo')
+    parser.add_argument("--confidence", dest = "confidence", help = "Object Confidence to filter predictions", default = 0.25)
+    parser.add_argument("--nms_thresh", dest = "nms_thresh", help = "NMS Threshhold", default = 0.4)
+
+    return parser.parse_args()
+
+
+
 if __name__ == '__main__':
     cfgfile = "cfg/tiny-yolo-voc.cfg"
     weightsfile = "tiny-yolo-voc.weights"
@@ -59,6 +75,10 @@ if __name__ == '__main__':
     num_classes = 20
     stride = 52
 
+    args = arg_parse()
+    confidence = float(args.confidence)
+    nms_thesh = float(args.nms_thresh)
+    start = 0
     CUDA = torch.cuda.is_available()
     
     bbox_attrs = 5 + num_classes
@@ -70,9 +90,7 @@ if __name__ == '__main__':
     
     if CUDA:
         model.cuda()
-        
-#    a = model(get_test_input(inp_dim, CUDA))
-    
+            
     model.eval()
     
     videofile = 'video.avi'
@@ -98,7 +116,7 @@ if __name__ == '__main__':
             
             
             output = model(Variable(img)).data
-            output = predict_transform(output, inp_dim, stride, model.anchors, num_classes, 0.25, CUDA)
+            output = predict_transform(output, inp_dim, stride, model.anchors, num_classes, confidence, CUDA)
            
             if type(output) == int:
                 frames += 1
@@ -110,10 +128,9 @@ if __name__ == '__main__':
                 continue
             
 
-            
-            output = write_results(output, num_classes, nms = True, nms_conf = 0.4)
+            output = write_results(output, num_classes, nms = True, nms_conf = nms_thesh)
         
-            output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
+            output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))/inp_dim
             
 #            im_dim = im_dim.repeat(output.size(0), 1)
             output[:,[1,3]] *= frame.shape[1]
