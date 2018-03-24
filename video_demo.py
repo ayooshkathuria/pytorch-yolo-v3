@@ -112,8 +112,7 @@ if __name__ == '__main__':
             
             output = output.float()
             
-            if CUDA:
-                write_results = write_results_half
+
             
             output = write_results(output, num_classes, nms = True, nms_conf = 0.4)
         
