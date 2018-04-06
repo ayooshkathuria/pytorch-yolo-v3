@@ -27,7 +27,7 @@ This time around, for v3, authors has supplied a weightsfile only for COCO [here
 the weights file into your repo directory. Or, you could just type (if you're on Linux)
 
 ```
-wget https://pjreddie.com/media/files/yolo-voc.weights 
+wget https://pjreddie.com/media/files/yolov3.weights 
 python detect.py --images imgs --det det 
 ```
 
@@ -51,7 +51,7 @@ For this, you should run the file, video_demo.py with --video flag specifying th
 since openCV only accepts OpenCV as the input format. 
 
 ```
-python video_demo.py --video video.avi --dataset pascal
+python video_demo.py --video video.avi
 ```
 
 Tweakable settings can be seen with -h flag. 
