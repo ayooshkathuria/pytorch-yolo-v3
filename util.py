@@ -22,22 +22,24 @@ def convert2cpu(matrix):
     else:
         return matrix
 
-def predict_transform(prediction, inp_dim, stride, anchors, num_classes, confidence = 0.5, CUDA = True):
+def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
     batch_size = prediction.size(0)
+    stride =  inp_dim // prediction.size(2)
     grid_size = inp_dim // stride
     bbox_attrs = 5 + num_classes
     num_anchors = len(anchors)
     
-    
+    anchors = [(a[0]/stride, a[1]/stride) for a in anchors]
+
     prediction = prediction.view(batch_size, bbox_attrs*num_anchors, grid_size*grid_size)
     prediction = prediction.transpose(1,2).contiguous()
     prediction = prediction.view(batch_size, grid_size*grid_size*num_anchors, bbox_attrs)
-    
-    
+
     #Sigmoid the  centre_X, centre_Y. and object confidencce
     prediction[:,:,0] = torch.sigmoid(prediction[:,:,0])
     prediction[:,:,1] = torch.sigmoid(prediction[:,:,1])
     prediction[:,:,4] = torch.sigmoid(prediction[:,:,4])
+    
 
     
     #Add the center offsets
@@ -65,33 +67,11 @@ def predict_transform(prediction, inp_dim, stride, anchors, num_classes, confide
     prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
 
     #Softmax the class scores
-    prediction[:,:,5: 5 + num_classes] = nn.Softmax(-1)(Variable(prediction[:,:, 5 : 5 + num_classes])).data
+    prediction[:,:,5: 5 + num_classes] = torch.sigmoid((prediction[:,:, 5 : 5 + num_classes]))
 
     prediction[:,:,:4] *= stride
     
-    conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
-    prediction = prediction*conf_mask
-    
-    try:
-        ind_nz = torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()
-    except:
-        return 0
 
-    
-    box = prediction[ind_nz[0], ind_nz[1]]
-    
-    
-    box_a = box.new(box.shape)
-    box_a[:,0] = (box[:,0] - box[:,2]/2)
-    box_a[:,1] = (box[:,1] - box[:,3]/2)
-    box_a[:,2] = (box[:,0] + box[:,2]/2) 
-    box_a[:,3] = (box[:,1] + box[:,3]/2)
-    box[:,:4] = box_a[:,:4]
-    
-    prediction[ind_nz[0], ind_nz[1]] = box
-    
-    conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
-    prediction = prediction*conf_mask    
     
     return prediction
 
@@ -114,16 +94,39 @@ def unique(tensor):
     tensor_res.copy_(unique_tensor)
     return tensor_res
 
-def write_results(prediction, num_classes, nms = True, nms_conf = 0.4):
+def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.4):
+    conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
+    prediction = prediction*conf_mask
+    
+    
+    try:
+        ind_nz = torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()
+    except:
+        return 0
+    
+    
+    
+
+    box_a = prediction.new(prediction.shape)
+    box_a[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
+    box_a[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
+    box_a[:,:,2] = (prediction[:,:,0] + prediction[:,:,2]/2) 
+    box_a[:,:,3] = (prediction[:,:,1] + prediction[:,:,3]/2)
+    prediction[:,:,:4] = box_a[:,:,:4]
+    
+
     
     batch_size = prediction.size(0)
     
     output = prediction.new(1, prediction.size(2) + 1)
     write = False
     
+    
     for ind in range(batch_size):
         #select the image from the batch
         image_pred = prediction[ind]
+        
+        
 
         
         #Get the class having maximum score, and the index of that class
@@ -214,8 +217,10 @@ Created on Sat Mar 24 00:12:16 2018
 @author: ayooshmac
 """
 
-def predict_transform_half(prediction, inp_dim, stride, anchors, num_classes, confidence = 0.5, CUDA = True):
+def predict_transform_half(prediction, inp_dim, anchors, num_classes, CUDA = True):
     batch_size = prediction.size(0)
+    stride =  inp_dim // prediction.size(2)
+
     bbox_attrs = 5 + num_classes
     num_anchors = len(anchors)
     grid_size = inp_dim // stride
@@ -259,8 +264,13 @@ def predict_transform_half(prediction, inp_dim, stride, anchors, num_classes, co
     #Softmax the class scores
     prediction[:,:,5: 5 + num_classes] = nn.Softmax(-1)(Variable(prediction[:,:, 5 : 5 + num_classes])).data
 
-    prediction[:,:,:4] *= inp_dim
+    prediction[:,:,:4] *= stride
     
+    
+    return prediction
+
+
+def write_results_half(prediction, confidence, num_classes, nms = True, nms_conf = 0.4):
     conf_mask = (prediction[:,:,4] > confidence).half().unsqueeze(2)
     prediction = prediction*conf_mask
     
@@ -268,27 +278,17 @@ def predict_transform_half(prediction, inp_dim, stride, anchors, num_classes, co
         ind_nz = torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()
     except:
         return 0
-
-    
-    box = prediction[ind_nz[0], ind_nz[1]]
     
     
-    box_a = box.new(box.shape)
-    box_a[:,0] = (box[:,0] - box[:,2]/2)
-    box_a[:,1] = (box[:,1] - box[:,3]/2)
-    box_a[:,2] = (box[:,0] + box[:,2]/2) 
-    box_a[:,3] = (box[:,1] + box[:,3]/2)
-    box[:,:4] = box_a[:,:4]
     
-    prediction[ind_nz[0], ind_nz[1]] = box
+    box_a = prediction.new(prediction.shape)
+    box_a[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
+    box_a[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
+    box_a[:,:,2] = (prediction[:,:,0] + prediction[:,:,2]/2) 
+    box_a[:,:,3] = (prediction[:,:,1] + prediction[:,:,3]/2)
+    prediction[:,:,:4] = box_a[:,:,:4]
     
-    conf_mask = (prediction[:,:,4] > confidence).half().unsqueeze(2)
-    prediction = prediction*conf_mask    
     
-    return prediction
-
-
-def write_results_half(prediction, num_classes, nms = True, nms_conf = 0.4):
     
     batch_size = prediction.size(0)
     
