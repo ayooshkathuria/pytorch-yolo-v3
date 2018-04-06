@@ -60,7 +60,7 @@ def arg_parse():
     """
     
     
-    parser = argparse.ArgumentParser(description='YOLO v2 Cam Demo')
+    parser = argparse.ArgumentParser(description='YOLO v3 Cam Demo')
     parser.add_argument("--confidence", dest = "confidence", help = "Object Confidence to filter predictions", default = 0.25)
     parser.add_argument("--nms_thresh", dest = "nms_thresh", help = "NMS Threshhold", default = 0.4)
 
@@ -69,11 +69,10 @@ def arg_parse():
 
 
 if __name__ == '__main__':
-    cfgfile = "cfg/tiny-yolo-voc.cfg"
-    weightsfile = "tiny-yolo-voc.weights"
-    inp_dim = 416
-    num_classes = 20
-    stride = 52
+    cfgfile = "cfg/yolov3.cfg"
+    weightsfile = "yolov3.weights"
+    inp_dim = int(model.net_info["height"])
+    num_classes = 80
 
     args = arg_parse()
     confidence = float(args.confidence)
@@ -85,7 +84,6 @@ if __name__ == '__main__':
     
     model = Darknet(cfgfile)
     model.load_weights(weightsfile)
-    num_anchors = len(model.anchors)
 
     
     if CUDA:
@@ -115,9 +113,9 @@ if __name__ == '__main__':
                 im_dim = im_dim.cuda()
             
             
-            output = model(Variable(img)).data
-            output = predict_transform(output, inp_dim, stride, model.anchors, num_classes, confidence, CUDA)
-           
+            output = model(Variable(img), CUDA)
+            output = write_results(output, confidence, num_classes, nms = True, nms_conf = nms_thesh)
+
             if type(output) == int:
                 frames += 1
                 print("FPS of the video is {:5.2f}".format( frames / (time.time() - start)))
@@ -128,7 +126,6 @@ if __name__ == '__main__':
                 continue
             
 
-            output = write_results(output, num_classes, nms = True, nms_conf = nms_thesh)
         
             output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))/inp_dim
             
@@ -137,7 +134,7 @@ if __name__ == '__main__':
             output[:,[2,4]] *= frame.shape[0]
 
             
-            classes = load_classes('data/voc.names')
+            classes = load_classes('data/coco.names')
             colors = pkl.load(open("pallete", "rb"))
             
             list(map(lambda x: write(x, orig_im), output))

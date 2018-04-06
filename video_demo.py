@@ -61,7 +61,7 @@ def arg_parse():
     """
     
     
-    parser = argparse.ArgumentParser(description='YOLO v2 Video Detection Module')
+    parser = argparse.ArgumentParser(description='YOLO v3 Video Detection Module')
    
     parser.add_argument("--video", dest = 'video', help = 
                         "Video to run detection upon",
@@ -69,7 +69,15 @@ def arg_parse():
     parser.add_argument("--dataset", dest = "dataset", help = "Dataset on which the network has been trained", default = "pascal")
     parser.add_argument("--confidence", dest = "confidence", help = "Object Confidence to filter predictions", default = 0.5)
     parser.add_argument("--nms_thresh", dest = "nms_thresh", help = "NMS Threshhold", default = 0.4)
-
+    parser.add_argument("--cfg", dest = 'cfgfile', help = 
+                        "Config file",
+                        default = "cfg/yolov3.cfg", type = str)
+    parser.add_argument("--weights", dest = 'weightsfile', help = 
+                        "weightsfile",
+                        default = "yolov3.weights", type = str)
+    parser.add_argument("--reso", dest = 'reso', help = 
+                        "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
+                        default = "416", type = str)
     return parser.parse_args()
 
 
@@ -80,44 +88,25 @@ if __name__ == '__main__':
     start = 0
 
     CUDA = torch.cuda.is_available()
-    
-    if args.dataset == "pascal":
-        inp_dim = 416
-        num_classes = 20
-        classes = load_classes('data/voc.names')
-        weightsfile = 'yolo-voc.weights'
-        cfgfile = "cfg/yolo-voc.cfg"
 
-    
-    elif args.dataset == "coco":
-        inp_dim = 544
-        num_classes = 80
-        classes = load_classes('data/coco.names')
-        weightsfile = 'yolo.weights'
-        cfgfile = "cfg/yolo.cfg" 
-        
-    else: 
-        print("Invalid dataset")
-        exit()
-
-        
-    stride = 32
+    num_classes = 80
 
     CUDA = torch.cuda.is_available()
     
     bbox_attrs = 5 + num_classes
     
     print("Loading network.....")
-    model = Darknet(cfgfile)
-    model.load_weights(weightsfile)
+    model = Darknet(args.cfgfile)
+    model.load_weights(args.weightsfile)
     print("Network successfully loaded")
-    num_anchors = len(model.anchors)
 
+    model.net_info["height"] = args.reso
+    inp_dim = int(model.net_info["height"])
     
     if CUDA:
         model.cuda()
         
-    model(get_test_input(inp_dim, CUDA))
+    model(get_test_input(inp_dim, CUDA), CUDA)
 
     model.eval()
     
@@ -144,9 +133,9 @@ if __name__ == '__main__':
                 im_dim = im_dim.cuda()
             
             
-            output = model(Variable(img, volatile = True)).data
-            output = predict_transform(output, inp_dim, stride, model.anchors, num_classes, confidence, CUDA)
-           
+            output = model(Variable(img, volatile = True), CUDA)
+            output = write_results(output, confidence, num_classes, nms = True, nms_conf = nms_thesh)
+
             if type(output) == int:
                 frames += 1
                 print("FPS of the video is {:5.2f}".format( frames / (time.time() - start)))
@@ -156,18 +145,16 @@ if __name__ == '__main__':
                     break
                 continue
             
-            output = output.float()
             
 
             
-            output = write_results(output, num_classes, nms = True, nms_conf = nms_thresh)
         
             output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
             
             im_dim = im_dim.repeat(output.size(0), 1)/inp_dim
             output[:,1:5] *= im_dim
             
-            classes = load_classes('data/voc.names')
+            classes = load_classes('data/coco.names')
             colors = pkl.load(open("pallete", "rb"))
             
             list(map(lambda x: write(x, orig_im), output))
