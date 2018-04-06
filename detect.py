@@ -113,6 +113,9 @@ if __name__ ==  '__main__':
         print ("No file or directory with the name {}".format(images))
         exit()
         
+    if not os.path.exists(args.det):
+        os.makedirs(args.det)
+        
     load_batch = time.time()
     
     batches = list(map(prep_image, imlist, [inp_dim for x in range(len(imlist))]))
@@ -120,6 +123,7 @@ if __name__ ==  '__main__':
     orig_ims = [x[1] for x in batches]
     im_dim_list = [x[2] for x in batches]
     im_dim_list = torch.FloatTensor(im_dim_list).repeat(1,2)
+    
     
     
     if CUDA:
