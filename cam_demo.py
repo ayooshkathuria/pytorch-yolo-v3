@@ -63,7 +63,9 @@ def arg_parse():
     parser = argparse.ArgumentParser(description='YOLO v3 Cam Demo')
     parser.add_argument("--confidence", dest = "confidence", help = "Object Confidence to filter predictions", default = 0.25)
     parser.add_argument("--nms_thresh", dest = "nms_thresh", help = "NMS Threshhold", default = 0.4)
-
+    parser.add_argument("--reso", dest = 'reso', help = 
+                        "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
+                        default = "160", type = str)
     return parser.parse_args()
 
 
@@ -71,7 +73,6 @@ def arg_parse():
 if __name__ == '__main__':
     cfgfile = "cfg/yolov3.cfg"
     weightsfile = "yolov3.weights"
-    inp_dim = int(model.net_info["height"])
     num_classes = 80
 
     args = arg_parse()
@@ -80,12 +81,18 @@ if __name__ == '__main__':
     start = 0
     CUDA = torch.cuda.is_available()
     
+
+    
+    
+    num_classes = 80
     bbox_attrs = 5 + num_classes
     
     model = Darknet(cfgfile)
     model.load_weights(weightsfile)
-
     
+    model.net_info["height"] = args.reso
+    inp_dim = int(model.net_info["height"])
+
     if CUDA:
         model.cuda()
             
