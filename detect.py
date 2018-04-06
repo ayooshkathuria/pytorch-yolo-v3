@@ -50,7 +50,7 @@ def arg_parse():
     """
     
     
-    parser = argparse.ArgumentParser(description='YOLO v2 Detection Module')
+    parser = argparse.ArgumentParser(description='YOLO v3 Detection Module')
    
     parser.add_argument("--images", dest = 'images', help = 
                         "Image / Directory containing images to perform detection upon",
@@ -59,12 +59,19 @@ def arg_parse():
                         "Image / Directory to store detections to",
                         default = "det", type = str)
     parser.add_argument("--bs", dest = "bs", help = "Batch size", default = 1)
-    parser.add_argument("--dataset", dest = "dataset", help = "Dataset on which the network has been trained", default = "pascal")
     parser.add_argument("--confidence", dest = "confidence", help = "Object Confidence to filter predictions", default = 0.5)
     parser.add_argument("--nms_thresh", dest = "nms_thresh", help = "NMS Threshhold", default = 0.4)
-
+    parser.add_argument("--cfg", dest = 'cfgfile', help = 
+                        "Config file",
+                        default = "cfg/yolov3.cfg", type = str)
+    parser.add_argument("--weights", dest = 'weightsfile', help = 
+                        "weightsfile",
+                        default = "yolov3.weights", type = str)
+    parser.add_argument("--reso", dest = 'reso', help = 
+                        "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
+                        default = "416", type = str)
+    
     return parser.parse_args()
-
 
 if __name__ ==  '__main__':
     args = arg_parse()
@@ -75,41 +82,23 @@ if __name__ ==  '__main__':
     start = 0
 
     CUDA = torch.cuda.is_available()
-    
-    if args.dataset == "pascal":
-        inp_dim = 416
-        num_classes = 20
-        classes = load_classes('data/voc.names')
-        weightsfile = 'yolo-voc.weights'
-        cfgfile = "cfg/yolo-voc.cfg"
 
-    
-    elif args.dataset == "coco":
-        inp_dim = 544
-        num_classes = 80
-        classes = load_classes('data/coco.names')
-        weightsfile = 'yolo.weights'
-        cfgfile = "cfg/yolo.cfg" 
-        
-    else: 
-        print("Invalid dataset")
-        exit()
-
-        
-    stride = 32
+    num_classes = 80
+    classes = load_classes('data/coco.names') 
 
     #Set up the neural network
     print("Loading network.....")
-    model = Darknet(cfgfile)
-    model.load_weights(weightsfile)
+    model = Darknet(args.cfgfile)
+    model.load_weights(args.weightsfile)
     print("Network successfully loaded")
     
-    
+    model.net_info["height"] = args.reso
+    inp_dim = int(model.net_info["height"])
     #If there's a GPU availible, put the model on GPU
     if CUDA:
         model.cuda()
     
-    model(get_test_input(inp_dim, CUDA))
+    
     #Set the model in evaluation mode
     model.eval()
     
@@ -126,12 +115,12 @@ if __name__ ==  '__main__':
         
     load_batch = time.time()
     
-
     batches = list(map(prep_image, imlist, [inp_dim for x in range(len(imlist))]))
     im_batches = [x[0] for x in batches]
     orig_ims = [x[1] for x in batches]
     im_dim_list = [x[2] for x in batches]
     im_dim_list = torch.FloatTensor(im_dim_list).repeat(1,2)
+    
     
     if CUDA:
         im_dim_list = im_dim_list.cuda()
@@ -140,6 +129,7 @@ if __name__ ==  '__main__':
     
     if (len(im_dim_list) % batch_size):
         leftover = 1
+        
         
     if batch_size != 1:
         num_batches = len(imlist) // batch_size + leftover            
@@ -151,45 +141,45 @@ if __name__ ==  '__main__':
     
     output = torch.FloatTensor(1, 8)
     write = False
-#    model(get_test_input(inp_dim, CUDA))
+    model(get_test_input(inp_dim, CUDA), CUDA)
     
     start_det_loop = time.time()
+    
+    objs = {}
+    
+    
+    
     for batch in im_batches:
         #load the image 
         start = time.time()
         if CUDA:
             batch = batch.cuda()
-       
-        prediction = model(Variable(batch, volatile = True))
         
-        prediction = prediction.data 
-        
-        
-        
+
         #Apply offsets to the result predictions
         #Tranform the predictions as described in the YOLO paper
         #flatten the prediction vector 
         # B x (bbox cord x no. of anchors) x grid_w x grid_h --> B x bbox x (all the boxes) 
         # Put every proposed box as a row.
+        prediction = model(Variable(batch, volatile = True), CUDA)
+
+
+        
         #get the boxes with object confidence > threshold
         #Convert the cordinates to absolute coordinates
-        
-        prediction = predict_transform(prediction, inp_dim, stride, model.anchors, num_classes, confidence, CUDA)
-        
-            
-        if type(prediction) == int:
-            i += 1
-            continue
-        
         #perform NMS on these boxes, and save the results 
         #I could have done NMS and saving seperately to have a better abstraction
         #But both these operations require looping, hence 
         #clubbing these ops in one loop instead of two. 
         #loops are slower than vectorised operations. 
         
-        prediction = write_results(prediction, num_classes, nms = True, nms_conf = nms_thesh)
+        prediction = write_results(prediction, confidence, num_classes, nms = True, nms_conf = nms_thesh)
         
         
+        if type(prediction) == int:
+            i += 1
+            continue
+
         end = time.time()
         
                     
@@ -201,7 +191,6 @@ if __name__ ==  '__main__':
         
     
             
-        
           
         if not write:
             output = prediction
@@ -209,9 +198,11 @@ if __name__ ==  '__main__':
         else:
             output = torch.cat((output,prediction))
             
+        
+        
 
-        for image in imlist[i*batch_size: min((i +  1)*batch_size, len(imlist))]:
-            im_id = imlist.index(image)
+        for im_num, image in enumerate(imlist[i*batch_size: min((i +  1)*batch_size, len(imlist))]):
+            im_id = i*batch_size + im_num
             objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
             print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
             print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
