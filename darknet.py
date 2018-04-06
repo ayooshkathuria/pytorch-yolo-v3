@@ -9,6 +9,7 @@ import cv2
 import matplotlib.pyplot as plt
 from util import count_parameters as count
 from util import convert2cpu as cpu
+from util import predict_transform
 
 class test_net(nn.Module):
     def __init__(self, num_layers, input_size):
@@ -51,8 +52,6 @@ def parse_cfg(cfgfile):
     block = {}
     blocks = []
     
-    
-    
     for line in lines:
         if line[0] == "[":               #This marks the start of a new block
             if len(block) != 0:
@@ -78,12 +77,43 @@ class MaxPoolStride1(nn.Module):
         pooled_x = F.max_pool2d(padded_x, self.kernel_size, padding = self.pad)
         return pooled_x
 
-class RouteLayer(nn.Module):
-    def __init__(self, start, end):
-        super(RouteLayer, self).__init__()
-        self.start = start
-        self.end = end
+class EmptyLayer(nn.Module):
+    def __init__(self):
+        super(EmptyLayer, self).__init__()
+        
 
+class DetectionLayer(nn.Module):
+    def __init__(self, anchors):
+        super(DetectionLayer, self).__init__()
+        self.anchors = anchors
+    
+    def forward(self, x, inp_dim, num_classes, confidence):
+        x = x.data
+        global CUDA
+        prediction = x
+        prediction = predict_transform(prediction, inp_dim, self.anchors, num_classes, confidence, CUDA)
+        return prediction
+        
+
+        
+
+
+class Upsample(nn.Module):
+    def __init__(self, stride=2):
+        super(Upsample, self).__init__()
+        self.stride = stride
+        
+    def forward(self, x):
+        stride = self.stride
+        assert(x.data.dim() == 4)
+        B = x.data.size(0)
+        C = x.data.size(1)
+        H = x.data.size(2)
+        W = x.data.size(3)
+        ws = stride
+        hs = stride
+        x = x.view(B, C, H, 1, W, 1).expand(B, C, H, stride, W, stride).contiguous().view(B, C, H*stride, W*stride)
+        return x
 #       
         
 class ReOrgLayer(nn.Module):
@@ -107,10 +137,7 @@ class ReOrgLayer(nn.Module):
 
 
 def create_modules(blocks):
-    inp_info = blocks[0]     #Captures the information about the input and pre-processing
-    modules = blocks[1:-1]   #The layers of the neural network
-    loss = blocks[-1]        # Loss function 
-    
+    net_info = blocks[0]     #Captures the information about the input and pre-processing    
     
     module_list = nn.ModuleList()
     
@@ -121,8 +148,11 @@ def create_modules(blocks):
     
     output_filters = []
     
-    for x in modules:
+    for x in blocks:
         module = nn.Sequential()
+        
+        if (x["type"] == "net"):
+            continue
         
         #If it's a convolutional layer
         if (x["type"] == "convolutional"):
@@ -134,6 +164,7 @@ def create_modules(blocks):
             except:
                 batch_normalize = 0
                 bias = True
+                
             filters= int(x["filters"])
             padding = int(x["pad"])
             kernel_size = int(x["size"])
@@ -161,53 +192,72 @@ def create_modules(blocks):
             
             
             
+        #If it's an upsampling layer
+        #We use Bilinear2dUpsampling
         
-        elif (x["type"] == "maxpool"):  #if it is a max pooling layer
-        
-        #Both YOLO f/ PASCAL and COCO don't use 2X2 pooling with stride 1
-        #Tiny-YOLO does use it 
-            kernel_size = int(x["size"])
+        elif (x["type"] == "upsample"):
             stride = int(x["stride"])
-            
-            if stride > 1:
-                pool = nn.MaxPool2d(kernel_size, stride)
-            
-            else:
-                pool = MaxPoolStride1(kernel_size)
-
-            module.add_module("pool_{0}".format(index), pool)
-            
-            
+#            upsample = Upsample(stride)
+            upsample = nn.Upsample(scale_factor = 2, mode = "bilinear")
+            module.add_module("upsample_{}".format(index), upsample)
+        
         #If it is a route layer
         elif (x["type"] == "route"):
             x["layers"] = x["layers"].split(',')
+            
+            #Start  of a route
             start = int(x["layers"][0])
+            
+            #end, if there exists one.
             try:
                 end = int(x["layers"][1])
             except:
                 end = 0
+                
             
+            
+            #Positive anotation
+            if start > 0: 
+                start = start - index
+            
+            if end > 0:
+                end = end - index
 
             
-            route = RouteLayer(start, end)
+            route = EmptyLayer()
             module.add_module("route_{0}".format(index), route)
-                
+            
+            
             
             if end < 0:
                 filters = output_filters[index + start] + output_filters[index + end]
             else:
-                output_filters[index + start]
                 filters= output_filters[index + start]
+                        
             
-             
-        #If it's a reorganisation layer (Identity mappings in ResNet)
-        elif (x["type"] == "reorg"):
-            stride = int(x["stride"])
+        
+        #shortcut corresponds to skip connection
+        if x["type"] == "shortcut":
+            from_ = int(x["from"])
+            shortcut = EmptyLayer()
+            module.add_module("shortcut_{}".format(index), shortcut)
+        
+        #Yolo is the detection layer
+        if x["type"] == "yolo":
+            mask = x["mask"].split(",")
+            mask = [int(x) for x in mask]
             
-            reorg = ReOrgLayer(stride)
-            module.add_module("reorg_{0}".format(index), reorg)
             
-            filters = filters*stride*stride
+            anchors = x["anchors"].split(",")
+            anchors = [int(a) for a in anchors]
+            anchors = [(anchors[i], anchors[i+1]) for i in range(0, len(anchors),2)]
+            anchors = [anchors[i] for i in mask]
+            
+            detection = DetectionLayer(anchors)
+            module.add_module("Detection_{}".format(index), detection)
+            
+            
+            
 
 
         module_list.append(module)
@@ -215,22 +265,20 @@ def create_modules(blocks):
         output_filters.append(filters)
         index += 1
     
-    return (inp_info, module_list, loss)
+    return (net_info, module_list)
+
 
 
 class Darknet(nn.Module):
     def __init__(self, cfgfile):
         super(Darknet, self).__init__()
         self.blocks = parse_cfg(cfgfile)
-        self.inp, self.module_list, self.loss = create_modules(self.blocks)
+        self.net_info, self.module_list = create_modules(self.blocks)
         self.header = torch.IntTensor([0,0,0,0])
         self.seen = 0
-        anchors = self.loss["anchors"]
-        anchors = anchors.split(',')
 
-        anchors = [float(x.lstrip()) for x in anchors]
-        anchors = [[anchors[i], anchors[i+1]] for i in range(0, len(anchors), 2)]
-        self.anchors = anchors
+        
+        
     def get_blocks(self):
         return self.blocks
     
@@ -238,27 +286,79 @@ class Darknet(nn.Module):
         return self.module_list
 
                 
-    def forward(self, x):
+    def forward(self, x, CUDA):
+        detections = []
+        modules = self.blocks[1:]
         outputs = {}   #We cache the outputs for the route layer
         
-        for i in range(len(self.module_list)):        
-            module_type = (self.blocks[i + 1]["type"])
-            if module_type == "convolutional" or module_type == "maxpool" or module_type=="reorg":
+        
+        write = 0
+        for i in range(len(modules)):        
+            
+ 
+            module_type = (modules[i]["type"])
+            if module_type == "convolutional" or module_type == "upsample":
+                
                 x = self.module_list[i](x)
                 outputs[i] = x
+
+                
             elif module_type == "route":
-                layers = self.blocks[i+1]["layers"]
+                layers = modules[i]["layers"]
+                layers = [int(a) for a in layers]
+                
+                if (layers[0]) > 0:
+                    layers[0] = layers[0] - i
+
                 if len(layers) == 1:
-                    x = outputs[i + int(layers[0])]
+                    x = outputs[i + (layers[0])]
 
                 else:
-                    start = outputs[i + int(layers[0])]
-                    end = outputs[i + int(layers[1])]
-                    x = torch.cat((start, end), 1)
+                    if (layers[1]) > 0:
+                        layers[1] = layers[1] - i
+                        
+                    map1 = outputs[i + layers[0]]
+                    map2 = outputs[i + layers[1]]
+                    
+                    x = torch.cat((map1, map2), 1)
                 outputs[i] = x
+            
+            elif  module_type == "shortcut":
+                from_ = int(modules[i]["from"])
+                x = outputs[i-1] + outputs[i+from_]
+                outputs[i] = x
+            
+            elif module_type == 'yolo':        
+                
+                anchors = self.module_list[i][0].anchors
+                #Get the input dimensions
+                inp_dim = int (self.net_info["height"])
+                
+                #Get the number of classes
+                num_classes = int (modules[i]["classes"])
+                
+                #Output the result
+                x = x.data
+                x = predict_transform(x, inp_dim, anchors, num_classes, CUDA)
+                
+                if type(x) == int:
+                    continue
 
-        return x
-    
+                
+                if not write:
+                    detections = x
+                    write = 1
+                
+                else:
+                    detections = torch.cat((detections, x), 1)
+                
+                outputs[i] = outputs[i-1]
+        
+        
+        try:
+            return detections
+        except:
+            return 0
 
             
     def load_weights(self, weightfile):
@@ -271,7 +371,7 @@ class Darknet(nn.Module):
         # 2. Minor Version Number
         # 3. Subversion number 
         # 4. IMages seen 
-        header = np.fromfile(fp, dtype = np.int32, count = 4)
+        header = np.fromfile(fp, dtype = np.int32, count = 5)
         self.header = torch.from_numpy(header)
         self.seen = self.header[3]
         
@@ -399,8 +499,10 @@ class Darknet(nn.Module):
 
 
 
-
-
-
-
-
+#
+#dn = Darknet('cfg/yolov3.cfg')
+#dn.load_weights("yolov3.weights")
+#inp = get_test_input()
+#a, interms = dn(inp)
+#dn.eval()
+#a_i, interms_i = dn(inp)
