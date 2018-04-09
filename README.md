@@ -1,6 +1,6 @@
 # A PyTorch implementation of a YOLO v3 Object Detector
 
-This repository contains code for a object detector based on [YOLOv3: An Incremental Improvement](https://pjreddie.com/media/files/papers/YOLOv3.pdf), implementedin PyTorch. The code is based on the official code of [YOLO v2](https://github.com/pjreddie/darknet), as well as a PyTorch 
+This repository contains code for a object detector based on [YOLOv3: An Incremental Improvement](https://pjreddie.com/media/files/papers/YOLOv3.pdf), implementedin PyTorch. The code is based on the official code of [YOLO v3](https://github.com/pjreddie/darknet), as well as a PyTorch 
 port of the original code, by [marvis](https://github.com/marvis/pytorch-yolo2). One of the goals of this code is to improve
 upon the original port by removing redundant parts of the code (The official code is basically a fully blown deep learning 
 library, and includes stuff like sequence models, which are not used in YOLO). I've also tried to keep the code minimal, and 
@@ -27,7 +27,7 @@ This time around, for v3, authors has supplied a weightsfile only for COCO [here
 the weights file into your repo directory. Or, you could just type (if you're on Linux)
 
 ```
-wget https://pjreddie.com/media/files/yolo-voc.weights 
+wget https://pjreddie.com/media/files/yolov3.weights 
 python detect.py --images imgs --det det 
 ```
 
@@ -51,7 +51,7 @@ For this, you should run the file, video_demo.py with --video flag specifying th
 since openCV only accepts OpenCV as the input format. 
 
 ```
-python video_demo.py --video video.avi --dataset pascal
+python video_demo.py --video video.avi
 ```
 
 Tweakable settings can be seen with -h flag. 
