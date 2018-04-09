@@ -121,6 +121,7 @@ if __name__ == '__main__':
             
             if CUDA:
                 im_dim = im_dim.cuda()
+                img = img.cuda()
             
             
             output = model(Variable(img), CUDA)
