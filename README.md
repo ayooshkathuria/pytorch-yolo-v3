@@ -11,7 +11,9 @@ As of now, the code only contains the detection module, but you should expect th
 ## Requirements
 1. Python 3.5
 2. OpenCV
-3. PyTorch 0.3+
+3. PyTorch 0.3
+
+Using PyTorch 0.4 breaks the detector. For details see this [issue](https://github.com/ayooshkathuria/pytorch-yolo-v3/issues/1)
 
 
 ## Detection Example
