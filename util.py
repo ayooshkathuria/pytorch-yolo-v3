@@ -31,9 +31,12 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
     
     anchors = [(a[0]/stride, a[1]/stride) for a in anchors]
 
+
+
     prediction = prediction.view(batch_size, bbox_attrs*num_anchors, grid_size*grid_size)
     prediction = prediction.transpose(1,2).contiguous()
     prediction = prediction.view(batch_size, grid_size*grid_size*num_anchors, bbox_attrs)
+
 
     #Sigmoid the  centre_X, centre_Y. and object confidencce
     prediction[:,:,0] = torch.sigmoid(prediction[:,:,0])
@@ -70,8 +73,7 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
     prediction[:,:,5: 5 + num_classes] = torch.sigmoid((prediction[:,:, 5 : 5 + num_classes]))
 
     prediction[:,:,:4] *= stride
-    
-
+   
     
     return prediction
 
@@ -98,15 +100,13 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
     conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
     prediction = prediction*conf_mask
     
-    
+
     try:
         ind_nz = torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()
     except:
         return 0
     
     
-    
-
     box_a = prediction.new(prediction.shape)
     box_a[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
     box_a[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
@@ -120,12 +120,11 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
     
     output = prediction.new(1, prediction.size(2) + 1)
     write = False
-    
-    
+
+
     for ind in range(batch_size):
         #select the image from the batch
         image_pred = prediction[ind]
-        
         
 
         
@@ -138,20 +137,19 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
         seq = (image_pred[:,:5], max_conf, max_conf_score)
         image_pred = torch.cat(seq, 1)
         
+
         
         #Get rid of the zero entries
         non_zero_ind =  (torch.nonzero(image_pred[:,4]))
+
         try:
-            image_pred_ = image_pred[non_zero_ind.squeeze(),:]
+            image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)
         except:
             continue
         
         #Get the various classes detected in the image
         img_classes = unique(image_pred_[:,-1])
         
-        
-        
-                
         #WE will do NMS classwise
         for cls in img_classes:
             #get the detections with one particular class
@@ -159,8 +157,9 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
             class_mask_ind = torch.nonzero(cls_mask[:,-2]).squeeze()
             
 
-            image_pred_class = image_pred_[class_mask_ind]
+            image_pred_class = image_pred_[class_mask_ind].view(-1,7)
 
+		
         
              #sort the detections such that the entry with the maximum objectness
              #confidence is at the top
@@ -188,18 +187,19 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
                     
                     #Remove the non-zero entries
                     non_zero_ind = torch.nonzero(image_pred_class[:,4]).squeeze()
-                    image_pred_class = image_pred_class[non_zero_ind]
+                    image_pred_class = image_pred_class[non_zero_ind].view(-1,7)
                     
                     
-            
+
             #Concatenate the batch_id of the image to the detection
             #this helps us identify which image does the detection correspond to 
             #We use a linear straucture to hold ALL the detections from the batch
             #the batch_dim is flattened
             #batch is identified by extra batch column
+            
+            
             batch_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(ind)
             seq = batch_ind, image_pred_class
-            
             if not write:
                 output = torch.cat(seq,1)
                 write = True
