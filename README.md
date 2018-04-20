@@ -6,6 +6,11 @@ upon the original port by removing redundant parts of the code (The official cod
 library, and includes stuff like sequence models, which are not used in YOLO). I've also tried to keep the code minimal, and 
 document it as well as I can. 
 
+### Tutorial for building this detector from scratch
+If you want to understand how to implement this detector by yourself from scratch, then you can go through this very detailed 5-part tutorial series I wrote on Paperspace. Perfect for someone who wants to move from beginner to intermediate pytorch skills. 
+
+[Implement YOLO v3 from scratch](https://blog.paperspace.com/how-to-implement-a-yolo-object-detector-in-pytorch/)
+
 As of now, the code only contains the detection module, but you should expect the training module soon. :) 
 
 ## Requirements
@@ -13,7 +18,10 @@ As of now, the code only contains the detection module, but you should expect th
 2. OpenCV
 3. PyTorch 0.3
 
-Using PyTorch 0.4 breaks the detector. For details see this [issue](https://github.com/ayooshkathuria/pytorch-yolo-v3/issues/1)
+Using PyTorch 0.4 breaks the detector on the master branch.
+
+For now, you can switch to the branch `pyt4` for running the detector with PyTorch 0.4.
+
 
 
 ## Detection Example
