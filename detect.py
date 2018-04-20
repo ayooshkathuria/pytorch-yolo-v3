@@ -147,6 +147,8 @@ if __name__ ==  '__main__':
     i = 0
     
     output = torch.FloatTensor(1, 8)
+    if CUDA:
+        output = output.cuda()
     write = False
     model(get_test_input(inp_dim, CUDA), CUDA)
     
