@@ -147,6 +147,8 @@ if __name__ ==  '__main__':
     i = 0
     
     output = torch.FloatTensor(1, 8)
+    if CUDA:
+        output = output.cuda()
     write = False
     model(get_test_input(inp_dim, CUDA), CUDA)
     
@@ -223,7 +225,7 @@ if __name__ ==  '__main__':
     
     output_recast = time.time()
     output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
-        
+    
     im_dim_list = torch.index_select(im_dim_list, 0, output[:,0].long())/inp_dim
     output[:,1:5] *= im_dim_list
     
