@@ -26,7 +26,7 @@ For now, you can switch to the branch `pyt4` for running the detector with PyTor
 
 ## Detection Example
 
-![Detection Example](https://github.com/ayooshkathuria/pytorch-yolo-v3/raw/master/det_messi.jpg)
+![Detection Example](https://i.imgur.com/m2jwneng.png)
 ## Running the detector
 
 ### On single or multiple images
