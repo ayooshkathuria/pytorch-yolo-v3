@@ -69,7 +69,7 @@ def arg_parse():
                         default = "yolov3.weights", type = str)
     parser.add_argument("--reso", dest = 'reso', help = 
                         "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
-                        default = "416", type = str)
+                        default = "320", type = str)
     parser.add_argument("--scales", dest = "scales", help = "Scales to use for detection",
                         default = "1,2,3", type = str)
     
@@ -82,9 +82,12 @@ if __name__ ==  '__main__':
     scales = [int(x) for x in scales.split(',')]
     
     scales_indices = []
+    args.reso = int(args.reso)
+    num_boxes = [args.reso//8, args.reso//16, args.reso//32]
+    num_boxes = sum([3*(x**2) for x in num_boxes])
     
     for scale in scales:
-        li = list(range((scale - 1)* 3549, scale * 3549))
+        li = list(range((scale - 1)* num_boxes // 3, scale * num_boxes // 3))
         scales_indices.extend(li)
 
     images = args.images
