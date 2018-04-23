@@ -158,9 +158,7 @@ if __name__ ==  '__main__':
 
     i = 0
     
-    output = torch.FloatTensor(1, 8)
-    if CUDA:
-        output = output.cuda()
+
     write = False
     model(get_test_input(inp_dim, CUDA), CUDA)
     
@@ -235,7 +233,12 @@ if __name__ ==  '__main__':
         if CUDA:
             torch.cuda.synchronize()
     
-    
+    try:
+        output
+    except NameError:
+        print("No detections were made")
+        exit()
+        
     output_recast = time.time()
     output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
     
@@ -262,7 +265,7 @@ if __name__ ==  '__main__':
         t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
         c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
         cv2.rectangle(img, c1, c2,color, -1)
-        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1);
+        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
         return img
     
             
@@ -289,8 +292,8 @@ if __name__ ==  '__main__':
 
     
     torch.cuda.empty_cache()
-        
-        
+    
+    
         
         
     
