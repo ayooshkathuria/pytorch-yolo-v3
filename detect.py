@@ -70,11 +70,23 @@ def arg_parse():
     parser.add_argument("--reso", dest = 'reso', help = 
                         "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
                         default = "416", type = str)
+    parser.add_argument("--scales", dest = "scales", help = "Scales to use for detection",
+                        default = "1,2,3", type = str)
     
     return parser.parse_args()
 
 if __name__ ==  '__main__':
     args = arg_parse()
+    
+    scales = args.scales
+    scales = [int(x) for x in scales.split(',')]
+    
+    scales_indices = []
+    
+    for scale in scales:
+        li = list(range((scale - 1)* 3549, scale * 3549))
+        scales_indices.extend(li)
+
     images = args.images
     batch_size = int(args.bs)
     confidence = float(args.confidence)
@@ -171,7 +183,8 @@ if __name__ ==  '__main__':
         # B x (bbox cord x no. of anchors) x grid_w x grid_h --> B x bbox x (all the boxes) 
         # Put every proposed box as a row.
         prediction = model(Variable(batch, volatile = True), CUDA)
-
+        
+        prediction = prediction[:,scales_indices]
 
         
         #get the boxes with object confidence > threshold
