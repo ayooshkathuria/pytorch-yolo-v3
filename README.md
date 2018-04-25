@@ -16,11 +16,11 @@ As of now, the code only contains the detection module, but you should expect th
 ## Requirements
 1. Python 3.5
 2. OpenCV
-3. PyTorch 0.3
+3. PyTorch 0.3 / 0.4
 
-Using PyTorch 0.4 breaks the detector on the master branch.
+Using PyTorch 0.4 raises a whole bunch of warnings due to backward-compatible PyTorch 0.3 code. 
 
-For now, you can switch to the branch `pyt4` for running the detector with PyTorch 0.4.
+You can switch to the branch `pyt4` for running the detector with PyTorch 0.4-only code.
 
 
 
