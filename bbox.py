@@ -64,7 +64,7 @@ def bbox_iou(box1, box2):
     inter_rect_y2 =  torch.min(b1_y2, b2_y2)
     
     #Intersection area
-    inter_area = (inter_rect_x2 - inter_rect_x1 + 1)*(inter_rect_y2 - inter_rect_y1 + 1)
+    inter_area = np.maximum(inter_rect_x2 - inter_rect_x1 + 1,0)*np.maximum(inter_rect_y2 - inter_rect_y1 + 1, 0)
     
     #Union Area
     b1_area = (b1_x2 - b1_x1 + 1)*(b1_y2 - b1_y1 + 1)
