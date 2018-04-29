@@ -135,8 +135,8 @@ if __name__ == '__main__':
                 im_dim = im_dim.cuda()
                 img = img.cuda()
             
-            
-            output = model(Variable(img, volatile = True), CUDA)
+            with torch.no_grad():   
+                output = model(Variable(img), CUDA)
             output = write_results(output, confidence, num_classes, nms = True, nms_conf = nms_thesh)
 
             if type(output) == int:
