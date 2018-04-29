@@ -7,7 +7,7 @@ import numpy as np
 import cv2 
 from util import *
 from darknet import Darknet
-from preprocess import prep_image, inp_to_image
+from preprocess import prep_image, inp_to_image, letterbox_image
 import pandas as pd
 import random 
 import pickle as pkl
@@ -36,7 +36,7 @@ def prep_image(img, inp_dim):
 
     orig_im = img
     dim = orig_im.shape[1], orig_im.shape[0]
-    img = cv2.resize(orig_im, (inp_dim, inp_dim))
+    img = (letterbox_image(orig_im, (inp_dim, inp_dim)))
     img_ = img[:,:,::-1].transpose((2,0,1)).copy()
     img_ = torch.from_numpy(img_).float().div(255.0).unsqueeze(0)
     return img_, orig_im, dim
@@ -153,10 +153,18 @@ if __name__ == '__main__':
                 continue
 
         
-            output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
+            im_dim = im_dim.repeat(output.size(0), 1)
+            scaling_factor = torch.min(inp_dim/im_dim,1)[0].view(-1,1)
             
-            im_dim = im_dim.repeat(output.size(0), 1)/inp_dim
-            output[:,1:5] *= im_dim
+            output[:,[1,3]] -= (inp_dim - scaling_factor*im_dim[:,0].view(-1,1))/2
+            output[:,[2,4]] -= (inp_dim - scaling_factor*im_dim[:,1].view(-1,1))/2
+            
+            output[:,1:5] /= scaling_factor
+    
+            for i in range(output.shape[0]):
+                output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, im_dim[i,0])
+                output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, im_dim[i,1])
+            
             
             classes = load_classes('data/coco.names')
             colors = pkl.load(open("pallete", "rb"))

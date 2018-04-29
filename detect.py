@@ -69,7 +69,7 @@ def arg_parse():
                         default = "yolov3.weights", type = str)
     parser.add_argument("--reso", dest = 'reso', help = 
                         "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
-                        default = "320", type = str)
+                        default = "416", type = str)
     parser.add_argument("--scales", dest = "scales", help = "Scales to use for detection",
                         default = "1,2,3", type = str)
     
@@ -242,11 +242,24 @@ if __name__ ==  '__main__':
         print("No detections were made")
         exit()
         
-    output_recast = time.time()
-    output[:,1:5] = torch.clamp(output[:,1:5], 0.0, float(inp_dim))
+    im_dim_list = torch.index_select(im_dim_list, 0, output[:,0].long())
     
-    im_dim_list = torch.index_select(im_dim_list, 0, output[:,0].long())/inp_dim
-    output[:,1:5] *= im_dim_list
+    scaling_factor = torch.min(inp_dim/im_dim_list,1)[0].view(-1,1)
+    
+    
+    output[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
+    output[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
+    
+    
+    
+    output[:,1:5] /= scaling_factor
+    
+    for i in range(output.shape[0]):
+        output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, im_dim_list[i,0])
+        output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, im_dim_list[i,1])
+        
+        
+    output_recast = time.time()
     
     
     class_load = time.time()
