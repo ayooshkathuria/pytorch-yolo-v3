@@ -198,7 +198,7 @@ def create_modules(blocks):
         elif (x["type"] == "upsample"):
             stride = int(x["stride"])
 #            upsample = Upsample(stride)
-            upsample = nn.Upsample(scale_factor = 2, mode = "bilinear")
+            upsample = nn.Upsample(scale_factor = 2, mode = "nearest")
             module.add_module("upsample_{}".format(index), upsample)
         
         #If it is a route layer
