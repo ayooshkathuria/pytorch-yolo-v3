@@ -1,9 +1,10 @@
 from __future__ import division
 
 import torch 
+import random
 
 import numpy as np
-
+import cv2
 
 def confidence_filter(result, confidence):
     conf_mask = (result[:,:,4] > confidence).float().unsqueeze(2)
@@ -99,7 +100,7 @@ def pred_corner_coord(prediction):
 
 
 
-def write(x, batches, results):
+def write(x, batches, results, colors, classes):
     c1 = tuple(x[1:3].int())
     c2 = tuple(x[3:5].int())
     img = results[int(x[0])]
