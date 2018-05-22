@@ -142,14 +142,14 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
         #Get rid of the zero entries
         non_zero_ind =  (torch.nonzero(image_pred[:,4]))
 
-        try:
-            image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)
-        except:
-            continue
+        
+        image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)
         
         #Get the various classes detected in the image
-        img_classes = unique(image_pred_[:,-1])
-        
+        try:
+            img_classes = unique(image_pred_[:,-1])
+        except:
+             continue
         #WE will do NMS classwise
         for cls in img_classes:
             #get the detections with one particular class
