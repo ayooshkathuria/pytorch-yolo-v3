@@ -82,6 +82,7 @@ python cam_demo.py
 ```
 You can easily tweak the code to use different weightsfiles, available at [yolo website](https://pjreddie.com/darknet/yolo/)
 
+NOTE: The scales features has been disabled for better refactoring.
 ### Detection across different scales
 YOLO v3 makes detections across different scales, each of which deputise in detecting objects of different sizes depending upon whether they capture coarse features, fine grained features or something between. You can experiment with these scales by the `--scales` flag. 
 
