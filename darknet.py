@@ -62,9 +62,11 @@ def parse_cfg(cfgfile):
             key,value = line.split("=")
             block[key.rstrip()] = value.lstrip()
     blocks.append(block)
+
     return blocks
 #    print('\n\n'.join([repr(x) for x in blocks]))
-    
+
+import pickle as pkl
 
 class MaxPoolStride1(nn.Module):
     def __init__(self, kernel_size):
@@ -73,9 +75,10 @@ class MaxPoolStride1(nn.Module):
         self.pad = kernel_size - 1
     
     def forward(self, x):
-        padded_x = F.pad(x, (0, self.pad, 0, self.pad), mode = "replicate")
-        pooled_x = F.max_pool2d(padded_x, self.kernel_size, padding = self.pad)
+        padded_x = F.pad(x, (0,self.pad,0,self.pad), mode="replicate")
+        pooled_x = nn.MaxPool2d(self.kernel_size, self.pad)(padded_x)
         return pooled_x
+    
 
 class EmptyLayer(nn.Module):
     def __init__(self):
@@ -237,13 +240,24 @@ def create_modules(blocks):
             
         
         #shortcut corresponds to skip connection
-        if x["type"] == "shortcut":
+        elif x["type"] == "shortcut":
             from_ = int(x["from"])
             shortcut = EmptyLayer()
             module.add_module("shortcut_{}".format(index), shortcut)
+            
+            
+        elif x["type"] == "maxpool":
+            stride = int(x["stride"])
+            size = int(x["size"])
+            if stride != 1:
+                maxpool = nn.MaxPool2d(size, stride)
+            else:
+                maxpool = MaxPoolStride1(size)
+            
+            module.add_module("maxpool_{}".format(index), maxpool)
         
         #Yolo is the detection layer
-        if x["type"] == "yolo":
+        elif x["type"] == "yolo":
             mask = x["mask"].split(",")
             mask = [int(x) for x in mask]
             
@@ -255,15 +269,19 @@ def create_modules(blocks):
             
             detection = DetectionLayer(anchors)
             module.add_module("Detection_{}".format(index), detection)
+        
             
             
-            
+        else:
+            print("Something I dunno")
+            assert False
 
 
         module_list.append(module)
         prev_filters = filters
         output_filters.append(filters)
         index += 1
+        
     
     return (net_info, module_list)
 
@@ -295,9 +313,8 @@ class Darknet(nn.Module):
         write = 0
         for i in range(len(modules)):        
             
- 
             module_type = (modules[i]["type"])
-            if module_type == "convolutional" or module_type == "upsample":
+            if module_type == "convolutional" or module_type == "upsample" or module_type == "maxpool":
                 
                 x = self.module_list[i](x)
                 outputs[i] = x
@@ -320,6 +337,7 @@ class Darknet(nn.Module):
                     map1 = outputs[i + layers[0]]
                     map2 = outputs[i + layers[1]]
                     
+                    
                     x = torch.cat((map1, map2), 1)
                 outputs[i] = x
             
@@ -327,6 +345,8 @@ class Darknet(nn.Module):
                 from_ = int(modules[i]["from"])
                 x = outputs[i-1] + outputs[i+from_]
                 outputs[i] = x
+                
+            
             
             elif module_type == 'yolo':        
                 
@@ -353,6 +373,7 @@ class Darknet(nn.Module):
                     detections = torch.cat((detections, x), 1)
                 
                 outputs[i] = outputs[i-1]
+                
         
         
         try:
