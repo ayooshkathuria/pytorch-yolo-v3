@@ -14,6 +14,7 @@ from preprocess import prep_image, inp_to_image
 import pandas as pd
 import random 
 import pickle as pkl
+import itertools
 
 class test_net(nn.Module):
     def __init__(self, num_layers, input_size):
@@ -81,14 +82,20 @@ if __name__ ==  '__main__':
     scales = args.scales
     scales = [int(x) for x in scales.split(',')]
     
-    scales_indices = []
     args.reso = int(args.reso)
-    num_boxes = [args.reso//8, args.reso//16, args.reso//32]
-    num_boxes = sum([3*(x**2) for x in num_boxes])
     
-    for scale in scales:
-        li = list(range((scale - 1)* num_boxes // 3, scale * num_boxes // 3))
-        scales_indices.extend(li)
+    num_boxes = [args.reso//32, args.reso//16, args.reso//8]    
+    scale_indices = [3*(x**2) for x in num_boxes]
+    scale_indices = list(itertools.accumulate(scale_indices, lambda x,y : x+y))
+
+    
+    li = []
+    i = 0
+    for scale in scale_indices:        
+        li.extend(list(range(i, scale))) 
+        i = scale
+    
+    scale_indices = li
 
     images = args.images
     batch_size = int(args.bs)
@@ -186,7 +193,7 @@ if __name__ ==  '__main__':
         with torch.no_grad():
             prediction = model(Variable(batch), CUDA)
         
-        prediction = prediction[:,scales_indices]
+        prediction = prediction[:,scale_indices]
 
         
         #get the boxes with object confidence > threshold
