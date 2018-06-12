@@ -134,7 +134,7 @@ if __name__ ==  '__main__':
     read_dir = time.time()
     #Detection phase
     try:
-        imlist = [osp.join(osp.realpath('.'), images, img) for img in os.listdir(images)]
+        imlist = [osp.join(osp.realpath('.'), images, img) for img in os.listdir(images) if os.path.splitext(img)[1] == '.png' or os.path.splitext(img)[1] =='.jpeg' or os.path.splitext(img)[1] =='.jpg']
     except NotADirectoryError:
         imlist = []
         imlist.append(osp.join(osp.realpath('.'), images))
