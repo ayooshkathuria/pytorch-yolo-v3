@@ -10,8 +10,11 @@ import matplotlib.pyplot as plt
 from util import count_parameters as count
 from util import convert2cpu as cpu
 from PIL import Image, ImageDraw
+from torch.utils.data import Dataset, DataLoader
+import os
 
 
+    
 def letterbox_image(img, inp_dim):
     '''resize image with unchanged aspect ratio using padding'''
     img_w, img_h = img.shape[1], img.shape[0]
@@ -50,7 +53,7 @@ def prep_image_pil(img, network_dim):
     img = torch.ByteTensor(torch.ByteStorage.from_buffer(img.tobytes()))
     img = img.view(*network_dim, 3).transpose(0,1).transpose(0,2).contiguous()
     img = img.view(1, 3,*network_dim)
-    img = img.float().div(255.0)
+    img = img.float().div(255.0).unsqueeze(0)
     return (img, orig_im, dim)
 
 def inp_to_image(inp):
@@ -65,4 +68,40 @@ def inp_to_image(inp):
     inp = inp[:,:,::-1]
     return inp
 
+
+class jaset(Dataset):
+    """Face Landmarks dataset."""
+
+    def __init__(self, root_dir, inp_dim = 416, transform=None):
+        """
+        Args:
+            csv_file (string): Path to the csv file with annotations.
+            root_dir (string): Directory with all the images.
+            transform (callable, optional): Optional transform to be applied
+                on a sample.
+        """
+        self.root_dir = root_dir
+        self.list_ims = [os.path.join(root_dir, x) for x in os.listdir(self.root_dir)]
+        self.transform = transform
+        self.inp_dim = inp_dim
+
+    def __len__(self):
+        return len(self.list_ims)
+
+    def __getitem__(self, idx):
+        img = self.list_ims[idx]
+        image, orig_im, dim = prep_image(img, self.inp_dim)
+        
+        print(image.shape)
+        
+
+        return image, dim
+
+test = jaset("imgs")
+
+tloader = DataLoader(test, batch_size = 3)
+
+for x in tloader:
+    print (x.shape)
+    assert False
 
