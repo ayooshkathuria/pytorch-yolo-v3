@@ -10,11 +10,13 @@ import argparse
 import os 
 import os.path as osp
 from darknet import Darknet
-from preprocess import prep_image, inp_to_image
+from preprocess import prep_image, inp_to_image, jaset
 import pandas as pd
 import random 
 import pickle as pkl
 import itertools
+from torch.utils.data import DataLoader
+
 
 class test_net(nn.Module):
     def __init__(self, num_layers, input_size):
@@ -133,56 +135,72 @@ if __name__ ==  '__main__':
     
     read_dir = time.time()
     #Detection phase
-    try:
-        imlist = [osp.join(osp.realpath('.'), images, img) for img in os.listdir(images) if os.path.splitext(img)[1] == '.png' or os.path.splitext(img)[1] =='.jpeg' or os.path.splitext(img)[1] =='.jpg']
-    except NotADirectoryError:
-        imlist = []
-        imlist.append(osp.join(osp.realpath('.'), images))
-    except FileNotFoundError:
-        print ("No file or directory with the name {}".format(images))
-        exit()
-        
-    if not os.path.exists(args.det):
-        os.makedirs(args.det)
-        
-    load_batch = time.time()
+#    try:
+#        imlist = [osp.join(osp.realpath('.'), images, img) for img in os.listdir(images) if os.path.splitext(img)[1] == '.png' or os.path.splitext(img)[1] =='.jpeg' or os.path.splitext(img)[1] =='.jpg']
+#    except NotADirectoryError:
+#        imlist = []
+#        imlist.append(osp.join(osp.realpath('.'), images))
+#    except FileNotFoundError:
+#        print ("No file or directory with the name {}".format(images))
+#        exit()
+#        
+#    if not os.path.exists(args.det):
+#        os.makedirs(args.det)
+#        
+#    load_batch = time.time()
+#    
+#
+#    
+#    
+#    if CUDA:
+#        im_dim_list = im_dim_list.cuda()
+#    
+#    leftover = 0
+#    
+#    if (len(im_dim_list) % batch_size):
+#        leftover = 1
+#        
+#        
+#    if batch_size != 1:
+#        num_batches = len(imlist) // batch_size + leftover            
+#        im_batches = [torch.cat((im_batches[i*batch_size : min((i +  1)*batch_size,
+#                            len(im_batches))]))  for i in range(num_batches)]        
+#
+#
+#    i = 0
+#    
+#
+    write = False
+    colors = pkl.load(open("pallete", "rb"))
+#    model(get_test_input(inp_dim, CUDA), CUDA)
+#    
+#    start_det_loop = time.time()
+#    
+#    objs = {}
     
-    batches = list(map(prep_image, imlist, [inp_dim for x in range(len(imlist))]))
-    im_batches = [x[0] for x in batches]
-    orig_ims = [x[1] for x in batches]
-    im_dim_list = [x[2] for x in batches]
-    im_dim_list = torch.FloatTensor(im_dim_list).repeat(1,2)
+    def writer(x, batches, results):
+        c1 = tuple(x[1:3].int())
+        c2 = tuple(x[3:5].int())
+        img = results[int(x[0])]
+        cls = int(x[-1])
+        label = "{0}".format(classes[cls])
+        color = random.choice(colors)
+        cv2.rectangle(img, c1, c2,color, 1)
+        t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
+        c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
+        cv2.rectangle(img, c1, c2,color, -1)
+        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
+        return img
     
+    test = jaset("imgs")
     
+    imlist = test.imlist()
     
-    if CUDA:
-        im_dim_list = im_dim_list.cuda()
-    
-    leftover = 0
-    
-    if (len(im_dim_list) % batch_size):
-        leftover = 1
-        
-        
-    if batch_size != 1:
-        num_batches = len(imlist) // batch_size + leftover            
-        im_batches = [torch.cat((im_batches[i*batch_size : min((i +  1)*batch_size,
-                            len(im_batches))]))  for i in range(num_batches)]        
-
+    batch_size = 4
+    tloader = DataLoader(test, batch_size, num_workers = 0)
 
     i = 0
-    
-
-    write = False
-    model(get_test_input(inp_dim, CUDA), CUDA)
-    
-    start_det_loop = time.time()
-    
-    objs = {}
-    
-    
-    
-    for batch in im_batches:
+    for ind, batch, dim in tloader:
         #load the image 
         start = time.time()
         if CUDA:
@@ -227,18 +245,13 @@ if __name__ ==  '__main__':
     
             
           
-        if not write:
-            output = prediction
-            write = 1
-        else:
-            output = torch.cat((output,prediction))
+
             
-        
         
 
         for im_num, image in enumerate(imlist[i*batch_size: min((i +  1)*batch_size, len(imlist))]):
             im_id = i*batch_size + im_num
-            objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
+            objs = [classes[int(x[-1])] for x in prediction if int(x[0]) == im_id]
             print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
             print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
             print("----------------------------------------------------------")
@@ -247,6 +260,44 @@ if __name__ ==  '__main__':
         
         if CUDA:
             torch.cuda.synchronize()
+        
+        im_dim_list = torch.stack(dim, 1)
+        im_dim_list = torch.index_select(im_dim_list, 0, prediction[:,0].long())
+        
+        im_dim_list = im_dim_list.float()
+        scaling_factor = torch.min(inp_dim/im_dim_list,1)[0].view(-1,1)
+    
+    
+        prediction[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
+        prediction[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
+        
+        prediction[:,1:5] /= scaling_factor
+        
+        for i in range(prediction.shape[0]):
+            prediction[i, [1,3]] = torch.clamp(prediction[i, [1,3]], 0.0, im_dim_list[i,0])
+            prediction[i, [2,4]] = torch.clamp(prediction[i, [2,4]], 0.0, im_dim_list[i,1])
+        
+        
+        orig_ims = [imlist[x] for x in [int(b) for b in ind]]
+        orig_ims = [cv2.imread(x) for x in orig_ims]
+        
+        
+        list(map(lambda x: writer(x, batch, orig_ims), prediction))
+        
+        det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
+    
+        list(map(cv2.imwrite, det_names, orig_ims))
+        
+        
+        
+        if not write:
+            output = prediction
+            write = 1
+        else:
+            output = torch.cat((output,prediction))
+        
+    
+    assert False
     
     try:
         output
@@ -270,31 +321,21 @@ if __name__ ==  '__main__':
         output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, im_dim_list[i,0])
         output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, im_dim_list[i,1])
         
+    
+    list(map(lambda x: write(x, im_batches, orig_ims), output))
         
     output_recast = time.time()
     
     
     class_load = time.time()
 
-    colors = pkl.load(open("pallete", "rb"))
+
     
     
     draw = time.time()
 
 
-    def write(x, batches, results):
-        c1 = tuple(x[1:3].int())
-        c2 = tuple(x[3:5].int())
-        img = results[int(x[0])]
-        cls = int(x[-1])
-        label = "{0}".format(classes[cls])
-        color = random.choice(colors)
-        cv2.rectangle(img, c1, c2,color, 1)
-        t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
-        c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
-        cv2.rectangle(img, c1, c2,color, -1)
-        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
-        return img
+    
     
             
     list(map(lambda x: write(x, im_batches, orig_ims), output))
