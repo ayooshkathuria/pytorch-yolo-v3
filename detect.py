@@ -178,7 +178,7 @@ if __name__ ==  '__main__':
 #    
 #    objs = {}
     
-    def writer(x, batches, results):
+    def writer(x, results):
         c1 = tuple(x[1:3].int())
         c2 = tuple(x[3:5].int())
         img = results[int(x[0])]
@@ -240,16 +240,17 @@ if __name__ ==  '__main__':
 
             
 
-        prediction[:,0] += i*batch_size
+#        prediction[:,0] += i*batch_size
         
     
             
           
 
             
-        
+        batch_imlist = [imlist[ind] for ind in [int(a) for a in ind]]
 
-        for im_num, image in enumerate(imlist[i*batch_size: min((i +  1)*batch_size, len(imlist))]):
+
+        for im_num, image in enumerate(batch_imlist):
             im_id = i*batch_size + im_num
             objs = [classes[int(x[-1])] for x in prediction if int(x[0]) == im_id]
             print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
@@ -262,6 +263,7 @@ if __name__ ==  '__main__':
             torch.cuda.synchronize()
         
         im_dim_list = torch.stack(dim, 1)
+        
         im_dim_list = torch.index_select(im_dim_list, 0, prediction[:,0].long())
         
         im_dim_list = im_dim_list.float()
@@ -278,13 +280,14 @@ if __name__ ==  '__main__':
             prediction[i, [2,4]] = torch.clamp(prediction[i, [2,4]], 0.0, im_dim_list[i,1])
         
         
-        orig_ims = [imlist[x] for x in [int(b) for b in ind]]
-        orig_ims = [cv2.imread(x) for x in orig_ims]
         
         
-        list(map(lambda x: writer(x, batch, orig_ims), prediction))
+        orig_ims = [cv2.imread(x) for x in batch_imlist]
         
-        det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
+        
+        list(map(lambda x: writer(x, orig_ims), prediction))
+        
+        det_names = pd.Series(batch_imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
     
         list(map(cv2.imwrite, det_names, orig_ims))
         
