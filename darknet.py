@@ -302,6 +302,45 @@ class Darknet(nn.Module):
     
     def get_module_list(self):
         return self.module_list
+    
+    
+    def get_scale_inds(self, scales, inp_dim):
+        det_scales = []
+        num_anchors = 0
+        stride = 1
+        
+        for x in self.blocks:
+            try:
+                x["stride"]
+                if x["type"] == "upsample":
+                    stride //= int(x["stride"])
+                else:
+                    stride *= int(x["stride"])
+            except KeyError:
+                pass
+            
+            if x["type"] == "yolo":
+                det_scales.append(stride)
+                num_anchors = (len(x["anchors"].split()))
+        
+        
+        num_anchors //= len(det_scales)
+        
+        scale_factors = [inp_dim//x for x in det_scales]
+        
+        num_boxes_per_scale = [x*x*num_anchors for x in scale_factors]
+        
+        i = 0
+        scale_inds = []
+        for scale, num in enumerate(num_boxes_per_scale):
+            inds = list(range(i,i+num))
+            if scale + 1 in scales:
+                scale_inds.extend(inds)
+            i = num
+                    
+        
+        
+        return scale_inds
 
                 
     def forward(self, x, CUDA):
@@ -522,6 +561,8 @@ class Darknet(nn.Module):
 
 #
 #dn = Darknet('cfg/yolov3.cfg')
+#scales = dn.get_scale_inds([1,3], 416)
+#print(scales)
 #dn.load_weights("yolov3.weights")
 #inp = get_test_input()
 #a, interms = dn(inp)

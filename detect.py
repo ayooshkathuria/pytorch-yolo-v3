@@ -82,27 +82,6 @@ if __name__ ==  '__main__':
     args = arg_parse()
     
     scales = args.scales
-    
-    
-#        scales = [int(x) for x in scales.split(',')]
-#        
-#        
-#        
-#        args.reso = int(args.reso)
-#        
-#        num_boxes = [args.reso//32, args.reso//16, args.reso//8]    
-#        scale_indices = [3*(x**2) for x in num_boxes]
-#        scale_indices = list(itertools.accumulate(scale_indices, lambda x,y : x+y))
-#    
-#        
-#        li = []
-#        i = 0
-#        for scale in scale_indices:        
-#            li.extend(list(range(i, scale))) 
-#            i = scale
-#        
-#        scale_indices = li
-
     images = args.images
     batch_size = int(args.bs)
     confidence = float(args.confidence)
@@ -124,6 +103,9 @@ if __name__ ==  '__main__':
     inp_dim = int(model.net_info["height"])
     assert inp_dim % 32 == 0 
     assert inp_dim > 32
+    
+    scales = [int(x) for x in scales.split(',')]
+    scale_inds = model.get_scale_inds(scales, inp_dim)
 
     #If there's a GPU availible, put the model on GPU
     if CUDA:
@@ -167,7 +149,7 @@ if __name__ ==  '__main__':
         with torch.no_grad():
             prediction = model(Variable(batch), CUDA)
         
-#        prediction = prediction[:,scale_indices]
+        prediction = prediction[:,scale_inds]
   
         #get the boxes with object confidence > threshold
         #Convert the cordinates to absolute coordinates
