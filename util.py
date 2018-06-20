@@ -395,5 +395,24 @@ def writer(x, results, classes, colors):
     cv2.rectangle(img, c1, c2,color, -1)
     cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
     return img
+
+def de_letter_box(prediction, dim, inp_dim):
     
+    im_dim_list = torch.stack(dim, 1)
     
+    im_dim_list = torch.index_select(im_dim_list, 0, prediction[:,0].long())
+    
+    im_dim_list = im_dim_list.float()
+    scaling_factor = torch.min(inp_dim/im_dim_list,1)[0].view(-1,1)
+
+
+    prediction[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
+    prediction[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
+    
+    prediction[:,1:5] /= scaling_factor
+    
+    for i in range(prediction.shape[0]):
+        prediction[i, [1,3]] = torch.clamp(prediction[i, [1,3]], 0.0, im_dim_list[i,0])
+        prediction[i, [2,4]] = torch.clamp(prediction[i, [2,4]], 0.0, im_dim_list[i,1])
+        
+    return prediction

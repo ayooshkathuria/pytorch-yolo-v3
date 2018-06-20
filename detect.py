@@ -149,7 +149,6 @@ if __name__ ==  '__main__':
     batch_size = 4
     imloader = DataLoader(test, batch_size, num_workers = 0)
 
-    i = 0
     
     start_det_loop = time.time()
     
@@ -169,8 +168,7 @@ if __name__ ==  '__main__':
             prediction = model(Variable(batch), CUDA)
         
 #        prediction = prediction[:,scale_indices]
-
-        
+  
         #get the boxes with object confidence > threshold
         #Convert the cordinates to absolute coordinates
         #perform NMS on these boxes, and save the results 
@@ -181,55 +179,44 @@ if __name__ ==  '__main__':
         
         prediction = write_results(prediction, confidence, num_classes, nms = True, nms_conf = nms_thesh)
         
-        
         if type(prediction) == int:
-            i += 1
             continue
 
         end = time.time()
-        
-                    
-#        print(end - start)
-
-            
-
-#        prediction[:,0] += i*batch_size
-        
-    
-            
-          
 
             
         batch_imlist = [imlist[ind] for ind in [int(a) for a in ind]]
 
-
+    
         for im_num, image in enumerate(batch_imlist):
             objs = [classes[int(x[-1])] for x in prediction if int(x[0]) == im_num]
             print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
             print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
             print("----------------------------------------------------------")
-        i += 1
+        
 
         
         if CUDA:
             torch.cuda.synchronize()
+            
+        prediction = de_letter_box(prediction, dim, inp_dim)
         
-        im_dim_list = torch.stack(dim, 1)
-        
-        im_dim_list = torch.index_select(im_dim_list, 0, prediction[:,0].long())
-        
-        im_dim_list = im_dim_list.float()
-        scaling_factor = torch.min(inp_dim/im_dim_list,1)[0].view(-1,1)
-    
-    
-        prediction[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
-        prediction[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
-        
-        prediction[:,1:5] /= scaling_factor
-        
-        for i in range(prediction.shape[0]):
-            prediction[i, [1,3]] = torch.clamp(prediction[i, [1,3]], 0.0, im_dim_list[i,0])
-            prediction[i, [2,4]] = torch.clamp(prediction[i, [2,4]], 0.0, im_dim_list[i,1])
+#            im_dim_list = torch.stack(dim, 1)
+#            
+#            im_dim_list = torch.index_select(im_dim_list, 0, prediction[:,0].long())
+#            
+#            im_dim_list = im_dim_list.float()
+#            scaling_factor = torch.min(inp_dim/im_dim_list,1)[0].view(-1,1)
+#        
+#        
+#            prediction[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
+#            prediction[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
+#            
+#            prediction[:,1:5] /= scaling_factor
+#            
+#            for i in range(prediction.shape[0]):
+#                prediction[i, [1,3]] = torch.clamp(prediction[i, [1,3]], 0.0, im_dim_list[i,0])
+#                prediction[i, [2,4]] = torch.clamp(prediction[i, [2,4]], 0.0, im_dim_list[i,1])
         
         
         orig_ims = [cv2.imread(x) for x in batch_imlist]
