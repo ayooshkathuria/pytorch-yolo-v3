@@ -69,7 +69,7 @@ def inp_to_image(inp):
     return inp
 
 
-class jaset(Dataset):
+class inferset(Dataset):
     """Face Landmarks dataset."""
 
     def __init__(self, root_dir, inp_dim = 416, transform=None):
@@ -97,12 +97,8 @@ class jaset(Dataset):
         return idx, image, dim
     
     
-test = jaset("imgs")
 
-imlist = test.imlist()
 
-batch_size = 4
-tloader = DataLoader(test, batch_size, num_workers = 0)
 
 
 

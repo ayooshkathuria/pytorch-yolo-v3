@@ -10,7 +10,7 @@ import argparse
 import os 
 import os.path as osp
 from darknet import Darknet
-from preprocess import prep_image, inp_to_image, jaset
+from preprocess import prep_image, inp_to_image, inferset
 import pandas as pd
 import random 
 import pickle as pkl
@@ -122,7 +122,7 @@ if __name__ ==  '__main__':
     
     load_batch = time.time()
     
-    test = jaset("imgs")
+    test = inferset("imgs")
     
     read_dir = time.time()
     
