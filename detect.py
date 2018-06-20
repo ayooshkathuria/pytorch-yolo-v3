@@ -176,12 +176,15 @@ if __name__ ==  '__main__':
             print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
             print("----------------------------------------------------------")
         
-
+        
         
         if CUDA:
             torch.cuda.synchronize()
             
-        prediction = de_letter_box(prediction, dim, inp_dim)
+        im_dim_list = torch.stack(dim, 1)
+
+            
+        prediction = de_letter_box(prediction, im_dim_list, inp_dim)
         
         
         write_preds(prediction, batch_imlist, args.det, classes, colors)
