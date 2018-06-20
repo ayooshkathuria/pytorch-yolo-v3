@@ -9,6 +9,7 @@ import numpy as np
 import cv2 
 import matplotlib.pyplot as plt
 from bbox import bbox_iou
+import pandas as pd
 
 
 def count_parameters(model):
@@ -416,3 +417,10 @@ def de_letter_box(prediction, dim, inp_dim):
         prediction[i, [2,4]] = torch.clamp(prediction[i, [2,4]], 0.0, im_dim_list[i,1])
         
     return prediction
+
+def write_preds(prediction, batch_imlist, save_dir, classes, colors):
+    orig_ims = [cv2.imread(im) for im in batch_imlist]
+    list(map(lambda x: writer(x, orig_ims, classes, colors), prediction))
+    det_names = pd.Series(batch_imlist).apply(lambda x: "{}/det_{}".format(save_dir,x.split("/")[-1]))
+    list(map(cv2.imwrite, det_names, orig_ims))
+    

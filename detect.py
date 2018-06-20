@@ -201,32 +201,8 @@ if __name__ ==  '__main__':
             
         prediction = de_letter_box(prediction, dim, inp_dim)
         
-#            im_dim_list = torch.stack(dim, 1)
-#            
-#            im_dim_list = torch.index_select(im_dim_list, 0, prediction[:,0].long())
-#            
-#            im_dim_list = im_dim_list.float()
-#            scaling_factor = torch.min(inp_dim/im_dim_list,1)[0].view(-1,1)
-#        
-#        
-#            prediction[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
-#            prediction[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
-#            
-#            prediction[:,1:5] /= scaling_factor
-#            
-#            for i in range(prediction.shape[0]):
-#                prediction[i, [1,3]] = torch.clamp(prediction[i, [1,3]], 0.0, im_dim_list[i,0])
-#                prediction[i, [2,4]] = torch.clamp(prediction[i, [2,4]], 0.0, im_dim_list[i,1])
         
-        
-        orig_ims = [cv2.imread(x) for x in batch_imlist]
-        
-        
-        list(map(lambda x: writer(x, orig_ims, classes, colors), prediction))
-        
-        det_names = pd.Series(batch_imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
-    
-        list(map(cv2.imwrite, det_names, orig_ims))
+        write_preds(prediction, batch_imlist, args.det, classes, colors)
         
         
         if not write:
