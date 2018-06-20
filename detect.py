@@ -137,20 +137,6 @@ if __name__ ==  '__main__':
 
     write = False
     colors = pkl.load(open("pallete", "rb"))
-
-    def writer(x, results):
-        c1 = tuple(x[1:3].int())
-        c2 = tuple(x[3:5].int())
-        img = results[int(x[0])]
-        cls = int(x[-1])
-        label = "{0}".format(classes[cls])
-        color = random.choice(colors)
-        cv2.rectangle(img, c1, c2,color, 1)
-        t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
-        c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
-        cv2.rectangle(img, c1, c2,color, -1)
-        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
-        return img
     
     load_batch = time.time()
     
@@ -249,7 +235,7 @@ if __name__ ==  '__main__':
         orig_ims = [cv2.imread(x) for x in batch_imlist]
         
         
-        list(map(lambda x: writer(x, orig_ims), prediction))
+        list(map(lambda x: writer(x, orig_ims, classes, colors), prediction))
         
         det_names = pd.Series(batch_imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
     

@@ -1,6 +1,6 @@
 
 from __future__ import division
-
+import random
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F 
@@ -9,6 +9,7 @@ import numpy as np
 import cv2 
 import matplotlib.pyplot as plt
 from bbox import bbox_iou
+
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters())
@@ -379,3 +380,20 @@ def write_results_half(prediction, confidence, num_classes, nms = True, nms_conf
                 output = torch.cat((output,out))
     
     return output
+
+
+def writer(x, results, classes, colors):
+    c1 = tuple(x[1:3].int())
+    c2 = tuple(x[3:5].int())
+    img = results[int(x[0])]
+    cls = int(x[-1])
+    label = "{0}".format(classes[cls])
+    color = random.choice(colors)
+    cv2.rectangle(img, c1, c2,color, 1)
+    t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
+    c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
+    cv2.rectangle(img, c1, c2,color, -1)
+    cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
+    return img
+    
+    
