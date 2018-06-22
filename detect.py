@@ -183,7 +183,9 @@ if __name__ ==  '__main__':
             
         im_dim_list = torch.stack(dim, 1)
 
-            
+        if CUDA:
+            im_dim_list = im_dim_list.cuda()
+    
         prediction = de_letter_box(prediction, im_dim_list, inp_dim)
         
         
