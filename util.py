@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from bbox import bbox_iou
 import pandas as pd
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters())
@@ -24,7 +25,7 @@ def convert2cpu(matrix):
     else:
         return matrix
 
-def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
+def predict_transform(prediction, inp_dim, anchors, num_classes):
     batch_size = prediction.size(0)
     stride =  inp_dim // prediction.size(2)
     grid_size = inp_dim // stride
@@ -51,22 +52,18 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
     grid_len = np.arange(grid_size)
     a,b = np.meshgrid(grid_len, grid_len)
     
-    x_offset = torch.FloatTensor(a).view(-1,1)
-    y_offset = torch.FloatTensor(b).view(-1,1)
+    x_offset = torch.FloatTensor(a).view(-1,1).to(device)
+    y_offset = torch.FloatTensor(b).view(-1,1).to(device)
     
-    if CUDA:
-        x_offset = x_offset.cuda()
-        y_offset = y_offset.cuda()
+
     
     x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,num_anchors).view(-1,2).unsqueeze(0)
     
     prediction[:,:,:2] += x_y_offset
       
     #log space transform height and the width
-    anchors = torch.FloatTensor(anchors)
-    
-    if CUDA:
-        anchors = anchors.cuda()
+    anchors = torch.FloatTensor(anchors).to(device)
+
     
     anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
     prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
@@ -219,7 +216,7 @@ Created on Sat Mar 24 00:12:16 2018
 @author: ayooshmac
 """
 
-def predict_transform_half(prediction, inp_dim, anchors, num_classes, CUDA = True):
+def predict_transform_half(prediction, inp_dim, anchors, num_classes):
     batch_size = prediction.size(0)
     stride =  inp_dim // prediction.size(2)
 
@@ -243,22 +240,18 @@ def predict_transform_half(prediction, inp_dim, anchors, num_classes, CUDA = Tru
     grid_len = np.arange(grid_size)
     a,b = np.meshgrid(grid_len, grid_len)
     
-    x_offset = torch.FloatTensor(a).view(-1,1)
-    y_offset = torch.FloatTensor(b).view(-1,1)
+    x_offset = torch.FloatTensor(a).view(-1,1).to(device)
+    y_offset = torch.FloatTensor(b).view(-1,1).to(device)
     
-    if CUDA:
-        x_offset = x_offset.cuda().half()
-        y_offset = y_offset.cuda().half()
+
     
     x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,num_anchors).view(-1,2).unsqueeze(0)
     
     prediction[:,:,:2] += x_y_offset
       
     #log space transform height and the width
-    anchors = torch.HalfTensor(anchors)
+    anchors = torch.HalfTensor(anchors).to(device)
     
-    if CUDA:
-        anchors = anchors.cuda()
     
     anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
     prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors

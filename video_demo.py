@@ -88,10 +88,11 @@ if __name__ == '__main__':
     start = 0
 
     CUDA = torch.cuda.is_available()
+    
+    device = torch.device("cuda:0" if CUDA else "cpu")
 
     num_classes = 80
 
-    CUDA = torch.cuda.is_available()
     
     bbox_attrs = 5 + num_classes
     
@@ -105,10 +106,8 @@ if __name__ == '__main__':
     assert inp_dim % 32 == 0 
     assert inp_dim > 32
 
-    if CUDA:
-        model.cuda()
-        
-    model(get_test_input(inp_dim, CUDA), CUDA)
+    model = model.to(device)
+    
 
     model.eval()
     
@@ -128,15 +127,13 @@ if __name__ == '__main__':
 
             img, orig_im, im_dim = prep_image(frame, inp_dim)
             
-            im_dim = torch.FloatTensor(dim)                        
+            im_dim = torch.FloatTensor(im_dim).to(device)                    
             
             
-            if CUDA:
-                im_dim = im_dim.cuda()
-                img = img.cuda()
+            img = img.to(device)
             
             with torch.no_grad():   
-                output = model(Variable(img), CUDA)
+                output = model(Variable(img))
             output = write_results(output, confidence, num_classes, nms = True, nms_conf = nms_thesh)
 
             if type(output) == int:

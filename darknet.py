@@ -92,9 +92,8 @@ class DetectionLayer(nn.Module):
     
     def forward(self, x, inp_dim, num_classes, confidence):
         x = x.data
-        global CUDA
         prediction = x
-        prediction = predict_transform(prediction, inp_dim, self.anchors, num_classes, confidence, CUDA)
+        prediction = predict_transform(prediction, inp_dim, self.anchors, num_classes, confidence)
         return prediction
         
 
@@ -343,7 +342,7 @@ class Darknet(nn.Module):
         return scale_inds
 
                 
-    def forward(self, x, CUDA):
+    def forward(self, x):
         detections = []
         modules = self.blocks[1:]
         outputs = {}   #We cache the outputs for the route layer
@@ -398,7 +397,7 @@ class Darknet(nn.Module):
                 
                 #Output the result
                 x = x.data
-                x = predict_transform(x, inp_dim, anchors, num_classes, CUDA)
+                x = predict_transform(x, inp_dim, anchors, num_classes)
                 
                 if type(x) == int:
                     continue

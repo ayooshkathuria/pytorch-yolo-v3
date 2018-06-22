@@ -89,6 +89,8 @@ if __name__ ==  '__main__':
     start = 0
 
     CUDA = torch.cuda.is_available()
+    
+    device = torch.device("cuda:0" if CUDA else "cpu")
 
     num_classes = 80
     classes = load_classes('data/coco.names') 
@@ -108,8 +110,7 @@ if __name__ ==  '__main__':
     scale_inds = model.get_scale_inds(scales, inp_dim)
 
     #If there's a GPU availible, put the model on GPU
-    if CUDA:
-        model.cuda()
+    model = model.to(device)
     
     
     #Set the model in evaluation mode
@@ -118,6 +119,7 @@ if __name__ ==  '__main__':
     read_dir = time.time()
 
     write = False
+    
     colors = pkl.load(open("pallete", "rb"))
     
     load_batch = time.time()
@@ -137,8 +139,7 @@ if __name__ ==  '__main__':
     for ind, batch, dim in imloader:
         #load the image 
         start = time.time()
-        if CUDA:
-            batch = batch.cuda()
+        batch = batch.to(device)
         
 
         #Apply offsets to the result predictions
@@ -147,7 +148,7 @@ if __name__ ==  '__main__':
         # B x (bbox cord x no. of anchors) x grid_w x grid_h --> B x bbox x (all the boxes) 
         # Put every proposed box as a row.
         with torch.no_grad():
-            prediction = model(Variable(batch), CUDA)
+            prediction = model(Variable(batch))
         
         prediction = prediction[:,scale_inds]
   
@@ -181,10 +182,9 @@ if __name__ ==  '__main__':
         if CUDA:
             torch.cuda.synchronize()
             
-        im_dim_list = torch.stack(dim, 1)
+        im_dim_list = torch.stack(dim, 1).to(device)
 
-        if CUDA:
-            im_dim_list = im_dim_list.cuda()
+
     
         prediction = de_letter_box(prediction, im_dim_list, inp_dim)
         
