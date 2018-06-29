@@ -13,7 +13,8 @@ from PIL import Image, ImageDraw
 from torch.utils.data import Dataset, DataLoader
 import os
 import random
-
+from torchvision import transforms
+from data_aug import *
 
     
 def letterbox_image(img, inp_dim):
@@ -110,38 +111,7 @@ def draw_rect(im, cords):
 
 
 
-class RandomHorizontalFlipForDet(object):
-    """Horizontally flip the given PIL Image randomly with a given probability.
 
-    Args:
-        p (float): probability of the image being flipped. Default value is 0.5
-    """
-
-    def __init__(self, p=0.5):
-        self.p = p
-
-    def __call__(self, img, bboxes):
-        """
-        Args:
-            img (PIL Image): Image to be flipped.
-
-        Returns:
-            PIL Image: Randomly flipped image.
-        """
-        
-        img_center = np.array(img.shape[:2])[::-1]/2
-        img_center = np.hstack((img_center, img_center))
-        if random.random() < self.p:
-            img =  img[:,::-1,:]
-            bboxes[:,[0,2]] += 2*(img_center[[0,2]] - bboxes[:,[0,2]])
-    
-#            
-        
-        
-        return img, bboxes
-
-    def __repr__(self):
-        return self.__class__.__name__ + '(p={})'.format(self.p)
     
     
 class toyset(Dataset):
@@ -191,7 +161,9 @@ class toyset(Dataset):
         
         return image, annots_transform
     
-toyloader = DataLoader(toyset("messi.jpg", transform = RandomHorizontalFlipForDet(0.5)))
+tran = Sequence([RandomHorizontalFlipForDet(0.5), RandomZoomForDet(0.5)])
+
+toyloader = DataLoader(toyset("messi.jpg", transform = tran))
 
 for x, ann in toyloader:
     x = x.squeeze().numpy()
