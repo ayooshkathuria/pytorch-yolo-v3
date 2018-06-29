@@ -12,6 +12,7 @@ from util import convert2cpu as cpu
 from PIL import Image, ImageDraw
 from torch.utils.data import Dataset, DataLoader
 import os
+import random
 
 
     
@@ -97,8 +98,110 @@ class inferset(Dataset):
         return idx, image, dim
     
     
+def draw_rect(im, cords):
+    pt1, pt2 = (cords[0], cords[1]) , (cords[2], cords[3])
+    
+
+    pt1 = int(pt1[0]), int(pt1[1])
+    pt2 = int(pt2[0]), int(pt2[1])
+
+    im = cv2.rectangle(im.copy(), pt1, pt2, [0,0,0], 5)
+    return im, pt1, pt2
 
 
 
+class RandomHorizontalFlipForDet(object):
+    """Horizontally flip the given PIL Image randomly with a given probability.
 
+    Args:
+        p (float): probability of the image being flipped. Default value is 0.5
+    """
 
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, img, bboxes):
+        """
+        Args:
+            img (PIL Image): Image to be flipped.
+
+        Returns:
+            PIL Image: Randomly flipped image.
+        """
+        
+        img_center = np.array(img.shape[:2])[::-1]/2
+        img_center = np.hstack((img_center, img_center))
+        if random.random() < self.p:
+            img =  img[:,::-1,:]
+            bboxes[:,[0,2]] += 2*(img_center[[0,2]] - bboxes[:,[0,2]])
+    
+#            
+        
+        
+        return img, bboxes
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(p={})'.format(self.p)
+    
+    
+class toyset(Dataset):
+
+    def __init__(self, img, transform=None):
+    
+        self.img = img
+        self.transform = transform
+
+    def __len__(self):
+        return 1
+    
+
+    def __getitem__(self, idx):
+        image = cv2.imread(self.img)
+        name =  self.img.split(".")[0]
+        name = "{}.txt".format(name)
+        
+        annots = open(name, "r").readlines()
+        
+        annots_ = []
+        
+        for annot in annots:
+            temp = annot.rstrip().split(" ")[1:]
+            temp = [float(x) for x in temp]
+            annots_.append(temp)
+            
+        annots_ = np.array(annots_)
+        
+        
+        annots_transform = np.zeros(annots_.shape)
+        
+        annots_transform[:,0] = annots_[:,0] - annots_[:,2]/2
+        annots_transform[:,1] = annots_[:,1] - annots_[:,3]/2
+        annots_transform[:,2] = annots_[:,0] + annots_[:,2]/2
+        annots_transform[:,3] = annots_[:,1] + annots_[:,3]/2
+        
+        
+        im_dim = np.array([image.shape[1], image.shape[0], image.shape[1], image.shape[0]])
+        
+        annots_transform *= im_dim
+
+        if self.transform:
+            image, annots = self.transform(image, annots_transform)
+        
+        image = image.copy()
+        
+        return image, annots_transform
+    
+toyloader = DataLoader(toyset("messi.jpg", transform = RandomHorizontalFlipForDet(0.5)))
+
+for x, ann in toyloader:
+    x = x.squeeze().numpy()
+    ann = ann.squeeze().numpy()
+    x = x[:,:,::-1]
+    
+    for cord in ann:
+        x, pt1, pt2 = draw_rect(x, cord)
+        
+    plt.imshow(x)
+    
+    
+    
