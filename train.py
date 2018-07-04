@@ -1,5 +1,5 @@
-import torch 
-import os 
+import torch
+import os
 import argparse
 from darknet import *
 
@@ -7,17 +7,17 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def arg_parse():
     """
     Parse arguements to the detect module
-    
-    """
-    
-    
-    parser = argparse.ArgumentParser(description='YOLO v3 Training Module')
-   
 
-    parser.add_argument("--cfg", dest = 'cfgfile', help = 
+    """
+
+
+    parser = argparse.ArgumentParser(description='YOLO v3 Training Module')
+
+
+    parser.add_argument("--cfg", dest = 'cfgfile', help =
                         "Config file",
                         default = "cfg/yolov3-train.cfg", type = str)
-    parser.add_argument("--weights", dest = 'weightsfile', help = 
+    parser.add_argument("--weights", dest = 'weightsfile', help =
                         "weightsfile",
                         default = "yolov3.weights", type = str)
     parser.add_argument("--datacfg", dest = "datafile", help = "cfg file containing the configuration for the dataset",
@@ -32,13 +32,13 @@ model = Darknet(args.cfgfile)
 model.load_weights(args.weightsfile)
 model = model.to(device)  ## Really? You're gonna train on the CPU?
 
-#Load the config file 
+# Load the config file
 net_options =  model.net_info
-#print(net_options)
+# print(net_options)
 
 ##Parse the config file
-batch = net_options['batch']       
-subdivisions = net_options['subdivisions']  #Irrelavant for our implementation simnce we laod the entire batch into our RAM 
+batch = net_options['batch']
+subdivisions = net_options['subdivisions']  #Irrelavant for our implementation simnce we laod the entire batch into our RAM
 #In darknet, subdivisions would the number of examples loaded into the RAM at once (after being concatenated)
 width = net_options['width']
 height = net_options['height']

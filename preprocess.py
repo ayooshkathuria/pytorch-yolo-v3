@@ -14,9 +14,11 @@ from torch.utils.data import Dataset, DataLoader
 import os
 import random
 from torchvision import transforms
-from data_aug import *
+from data_aug.data_aug import *
+from data_aug.bbox_util import draw_rect
 
-    
+
+
 def letterbox_image(img, inp_dim):
     '''resize image with unchanged aspect ratio using padding'''
     img_w, img_h = img.shape[1], img.shape[0]
@@ -99,16 +101,6 @@ class inferset(Dataset):
         return idx, image, dim
     
     
-def draw_rect(im, cords):
-    pt1, pt2 = (cords[0], cords[1]) , (cords[2], cords[3])
-    
-
-    pt1 = int(pt1[0]), int(pt1[1])
-    pt2 = int(pt2[0]), int(pt2[1])
-
-    im = cv2.rectangle(im.copy(), pt1, pt2, [0,0,0], 5)
-    return im, pt1, pt2
-
 
 
 
@@ -159,21 +151,24 @@ class toyset(Dataset):
         
         image = image.copy()
         
-        return image, annots_transform
+        return image, annots
     
-tran = Sequence([RandomHorizontalFlipForDet(0.5), RandomZoomForDet(0.5)])
+tran = Sequence([RandomZoomForDet(0.2,0.2), RandomHorizontalFlipForDet(0.5)])
 
-toyloader = DataLoader(toyset("messi.jpg", transform = tran))
+
+toyloader = DataLoader(toyset("data_aug/demo.jpeg", transform = tran))
 
 for x, ann in toyloader:
     x = x.squeeze().numpy()
     ann = ann.squeeze().numpy()
-    x = x[:,:,::-1]
+    print(ann)
+    x = cv2.cvtColor(x.astype(np.uint8), cv2.COLOR_BGR2RGB)
     
     for cord in ann:
         x, pt1, pt2 = draw_rect(x, cord)
         
     plt.imshow(x)
-    
+#    plt.imshow(cv2.imread("test.jpg"))
+    plt.show() 
     
     
