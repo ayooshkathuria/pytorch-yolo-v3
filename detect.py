@@ -39,7 +39,7 @@ def get_test_input(input_dim, CUDA):
     
     if CUDA:
         img_ = img_.cuda()
-    num_classes
+    
     return img_
 
 
