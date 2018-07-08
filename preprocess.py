@@ -153,15 +153,15 @@ class toyset(Dataset):
         
         return image, annots
     
-tran = Sequence([RandomZoomForDet(0.2,0.2), RandomHorizontalFlipForDet(0.5)])
+#tran = Sequence([RandomHorizontalFlipForDet(0.5), RandomZoomForDet(0.2,0.2)])
 
+tran = Sequence([RandomRotate(angle = 10)])
 
 toyloader = DataLoader(toyset("data_aug/demo.jpeg", transform = tran))
 
 for x, ann in toyloader:
     x = x.squeeze().numpy()
     ann = ann.squeeze().numpy()
-    print(ann)
     x = cv2.cvtColor(x.astype(np.uint8), cv2.COLOR_BGR2RGB)
     
     for cord in ann:
@@ -169,6 +169,7 @@ for x, ann in toyloader:
         
     plt.imshow(x)
 #    plt.imshow(cv2.imread("test.jpg"))
+    cv2.imwrite("test.png", x)
     plt.show() 
     
     
