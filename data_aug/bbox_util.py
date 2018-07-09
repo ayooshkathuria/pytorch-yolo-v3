@@ -57,7 +57,7 @@ def rotate_bound(image, angle):
 
     # perform the actual rotation and return the image
     image = cv2.warpAffine(image, M, (nW, nH))
-    image = cv2.resize(image, (w,h))
+#    image = cv2.resize(image, (w,h))
     return image
 
 
@@ -66,6 +66,7 @@ def rotate_box(corners,angle,  cx, cy, h, w):
     corners = np.hstack((corners, np.ones((corners.shape[0],1), dtype = type(corners[0][0]))))
     
     M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+    
     
     cos = np.abs(M[0, 0])
     sin = np.abs(M[0, 1])
@@ -80,26 +81,8 @@ def rotate_box(corners,angle,  cx, cy, h, w):
     
     calculated = calculated.reshape(-1,8)
     
-    return calculated
+    return calculated, nW, nH
         
-    for i,coord in enumerate(bb):
-        # opencv calculates standard transformation matrix
-        M = cv2.getRotationMatrix2D((cx, cy), theta, 1.0)
-        # Grab  the rotation components of the matrix)
-        cos = np.abs(M[0, 0])
-        sin = np.abs(M[0, 1])
-        # compute the new bounding dimensions of the image
-        nW = int((h * sin) + (w * cos))
-        nH = int((h * cos) + (w * sin))
-        # adjust the rotation matrix to take into account translation
-        M[0, 2] += (nW / 2) - cx
-        M[1, 2] += (nH / 2) - cy
-        # Prepare the vector to be transformed
-        v = [coord[0],coord[1],1]
-        # Perform the actual rotation and return the image
-        calculated = np.dot(M,v)
-        new_bb[i] = (calculated[0],calculated[1])
-    return new_bb
 
 def get_corners(bboxes):
     width = (bboxes[:,2] - bboxes[:,0]).reshape(-1,1)
@@ -108,7 +91,6 @@ def get_corners(bboxes):
     x1 = bboxes[:,0].reshape(-1,1)
     y1 = bboxes[:,1].reshape(-1,1)
     
-    print(x1.shape)
     x2 = x1 + width
     y2 = y1 
     
@@ -124,4 +106,31 @@ def get_corners(bboxes):
 
 
 
+def get_enclosing_box(corners):
+    x_ = corners[:,[0,2,4,6]]
+    y_ = corners[:,[1,3,5,7]]
     
+    xmin = np.min(x_,1)
+    ymin = np.min(y_,1)
+    xmax = np.max(x_,1)
+    ymax = np.max(y_,1)
+    
+    final = np.vstack((xmin, ymin, xmax, ymax)).T
+    
+    return final
+    x_min = np.minimum()
+    
+def letterbox_image(img, inp_dim):
+    inp_dim = (inp_dim, inp_dim)
+    '''resize image with unchanged aspect ratio using padding'''
+    img_w, img_h = img.shape[1], img.shape[0]
+    w, h = inp_dim
+    new_w = int(img_w * min(w/img_w, h/img_h))
+    new_h = int(img_h * min(w/img_w, h/img_h))
+    resized_image = cv2.resize(img, (new_w,new_h))
+    
+    canvas = np.full((inp_dim[1], inp_dim[0], 3), 0)
+
+    canvas[(h-new_h)//2:(h-new_h)//2 + new_h,(w-new_w)//2:(w-new_w)//2 + new_w,  :] = resized_image
+    
+    return canvas

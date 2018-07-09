@@ -127,7 +127,7 @@ class RandomScaleTranslate(object):
         
         
         canvas = np.zeros(img_shape) 
-        canvas[:,:] = [127,127,127]
+        canvas[:,:] = [0,0,0]
         mask = img[max(corner_y, 0):min(img.shape[0], corner_y + img_shape[0]), max(corner_x, 0):min(img.shape[1], corner_x + img_shape[1]),:]
         canvas[orig_box_cords[0]:orig_box_cords[2], orig_box_cords[1]:orig_box_cords[3],:] = mask
         img = canvas
@@ -331,7 +331,8 @@ class RandomRotate(object):
     """
 
     def __init__(self, angle):
-        self.angle = angle
+        self.arg_angle = angle
+        self.angle = random.uniform(-angle, angle)
 
     def __call__(self, img, bboxes):
         """
@@ -347,16 +348,114 @@ class RandomRotate(object):
         w,h = img.shape[1], img.shape[0]
         cx, cy = w//2, h//2
         
-        print(bboxes.shape)
         corners = get_corners(bboxes)
         img = rotate_bound(img, self.angle)
         
-        corners = rotate_box(corners, self.angle, cx, cy, h, w)
+        corners, nW, nH = rotate_box(corners, self.angle, cx, cy, h, w)
         
         new_bbox = get_enclosing_box(corners)
+        
+        scale_factor_x = img.shape[1] / w
+        
+        scale_factor_y = img.shape[0] / h
+        
+        img = cv2.resize(img, (w,h))
+        
+        new_bbox /= [scale_factor_x, scale_factor_y, scale_factor_x, scale_factor_y] 
+        
+        
+        
+        
+        
+        bboxes  = new_bbox
 
+        bboxes = clip_box(bboxes, [0,0,w, h], 0.25)
+        
         return img, bboxes
         
         
     def __repr__(self):
         return self.__class__.__name__ + '(p={})'.format(self.p)
+    
+class RandomShear(object):
+    """Horizontally flip the given PIL Image randomly with a given probability.
+
+    Args:
+        p (float): probability of the image being flipped. Default value is 0.5
+    """
+
+    def __init__(self, shear_factor = 0.2):
+        self.arg_shear_factor = shear_factor
+        self.shear_factor = random.uniform(-shear_factor, shear_factor)
+
+    def __call__(self, img, bboxes):
+        """
+        Args:
+            img (PIL Image): Image to be flipped.
+
+        Returns:
+            PIL Image: Randomly flipped image.
+            
+            
+        """
+        M = np.array([[1, self.shear_factor, 0],[0,1,0]])
+                
+        nW =  img.shape[1] + abs(self.shear_factor*img.shape[0])
+        
+        bboxes[:,[0,2]] += (bboxes[:,[1,3]]*self.shear_factor).astype(int) 
+
+        
+        if self.shear_factor < 0:
+            M[0,2] += (nW - img.shape[1])
+            bboxes[:,[0,2]] += (nW - img.shape[1])
+        
+        
+        img = cv2.warpAffine(img, M, (int(nW), img.shape[0]))
+        
+        
+        return img, bboxes
+        
+        
+    def __repr__(self):
+        return self.__class__.__name__ + '(p={})'.format(self.p)
+    
+class YoloResize(object):
+    
+    def __init__(self, inp_dim):
+        self.inp_dim = inp_dim
+    
+    def __call__(self, img, bboxes):
+        w,h = img.shape[1], img.shape[0]
+        img = letterbox_image(img, self.inp_dim)
+        
+#        
+        scale = min(self.inp_dim/h, self.inp_dim/w)
+#        
+#        print(scale)
+        
+        
+#       
+        bboxes *= (scale)
+#        
+#        bboxes = bboxes.astype(int)
+#        
+        new_h = scale*h
+        new_w = scale*w
+        
+        
+        inp_dim = self.inp_dim
+        
+        
+        del_h = (inp_dim - new_h)/2
+        del_w = (inp_dim - new_w)/2
+        
+        
+        add_matrix = np.array([[del_w, del_h, del_w, del_h]]).astype(int)
+        
+        bboxes += add_matrix
+        
+        
+        
+        
+        
+        return img, bboxes

@@ -153,9 +153,9 @@ class toyset(Dataset):
         
         return image, annots
     
-#tran = Sequence([RandomHorizontalFlipForDet(0.5), RandomZoomForDet(0.2,0.2)])
+#tran = Sequence([RandomRotate(10)])
 
-tran = Sequence([RandomRotate(angle = 10)])
+tran = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(), RandomRotate(10), RandomShear(), YoloResize(608)])
 
 toyloader = DataLoader(toyset("data_aug/demo.jpeg", transform = tran))
 
