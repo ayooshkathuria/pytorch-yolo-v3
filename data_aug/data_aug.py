@@ -340,13 +340,20 @@ class RandomRotate(object):
 
         Returns:
             PIL Image: Randomly flipped image.
+            
+            
         """
+        
+        w,h = img.shape[1], img.shape[0]
+        cx, cy = w//2, h//2
+        
+        print(bboxes.shape)
+        corners = get_corners(bboxes)
         img = rotate_bound(img, self.angle)
         
+        corners = rotate_box(corners, self.angle, cx, cy, h, w)
         
-        
-        
-        
+        new_bbox = get_enclosing_box(corners)
 
         return img, bboxes
         

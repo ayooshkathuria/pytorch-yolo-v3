@@ -61,6 +61,45 @@ def rotate_bound(image, angle):
     return image
 
 
+def rotate_box(corners,angle,  cx, cy, h, w):
+    corners = corners.reshape(-1,2)
+    corners = np.hstack((corners, np.ones((corners.shape[0],1), dtype = type(corners[0][0]))))
+    
+    M = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+    
+    cos = np.abs(M[0, 0])
+    sin = np.abs(M[0, 1])
+    
+    nW = int((h * sin) + (w * cos))
+    nH = int((h * cos) + (w * sin))
+    # adjust the rotation matrix to take into account translation
+    M[0, 2] += (nW / 2) - cx
+    M[1, 2] += (nH / 2) - cy
+    # Prepare the vector to be transformed
+    calculated = np.dot(M,corners.T).T
+    
+    calculated = calculated.reshape(-1,8)
+    
+    return calculated
+        
+    for i,coord in enumerate(bb):
+        # opencv calculates standard transformation matrix
+        M = cv2.getRotationMatrix2D((cx, cy), theta, 1.0)
+        # Grab  the rotation components of the matrix)
+        cos = np.abs(M[0, 0])
+        sin = np.abs(M[0, 1])
+        # compute the new bounding dimensions of the image
+        nW = int((h * sin) + (w * cos))
+        nH = int((h * cos) + (w * sin))
+        # adjust the rotation matrix to take into account translation
+        M[0, 2] += (nW / 2) - cx
+        M[1, 2] += (nH / 2) - cy
+        # Prepare the vector to be transformed
+        v = [coord[0],coord[1],1]
+        # Perform the actual rotation and return the image
+        calculated = np.dot(M,v)
+        new_bb[i] = (calculated[0],calculated[1])
+    return new_bb
 
 def get_corners(bboxes):
     width = (bboxes[:,2] - bboxes[:,0]).reshape(-1,1)
@@ -69,6 +108,7 @@ def get_corners(bboxes):
     x1 = bboxes[:,0].reshape(-1,1)
     y1 = bboxes[:,1].reshape(-1,1)
     
+    print(x1.shape)
     x2 = x1 + width
     y2 = y1 
     
@@ -78,6 +118,10 @@ def get_corners(bboxes):
     x4 = bboxes[:,2].reshape(-1,1)
     y4 = bboxes[:,3].reshape(-1,1)
     
-    corners = np.vstack(x1,y1,x2,y2,x3,y3)
+    corners = np.hstack((x1,y1,x2,y2,x3,y3,x4,y4))
+    
+    return corners
+
+
 
     
