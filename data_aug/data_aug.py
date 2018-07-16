@@ -9,17 +9,38 @@ import os
 a = os.path.join(os.path.realpath("."), "data_aug")
 
 sys.path.append(a)
-from bbox_util import *
+from data_aug.bbox_util import *
 
 a = 1
 
 class Sequence(object):
-    """
-    Takes in a list of augmentation functions to apply consecutively
+
+    """Initialise Sequence object
     
-    """
+    Apply a Sequence of transformations to the images/boxes.
     
+    Parameters
+    ----------
+    augemnetations : list 
+        List containing Transformation Objects in Sequence they are to be 
+        applied
+    
+    probs : int or list 
+        If **int**, the probability with which each of the transformation will 
+        be applied. If **list**, the length must be equal to *augmentations*. 
+        Each element of this list is the probability with which each 
+        corresponding transformation is applied
+    
+    Returns
+    -------
+    
+    Sequence
+        Sequence Object 
+        
+    """
     def __init__(self, augmentations, probs = 1):
+
+        
         self.augmentations = augmentations
         self.probs = probs
         
@@ -37,24 +58,32 @@ class Sequence(object):
         return images, bboxes
 
 class RandomHorizontalFlip(object):
-    """Horizontally flip the image with the probability p.
-
-    Args:
-        p (float): probability of the image being flipped. Default value is 0.5
+    
+    """Randomly horizontally flips the Image with the probability *p*
+    
+    Parameters
+    ----------
+    p: float
+        The probability with which the image is flipped
+        
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Flipped image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
     """
 
     def __init__(self, p=0.5):
         self.p = p
 
     def __call__(self, img, bboxes):
-        """
-        Args:
-            img (PIL Image): Image to be flipped.
 
-        Returns:
-            PIL Image: Randomly flipped image.
-        """
-        
         
         img_center = np.array(img.shape[:2])[::-1]/2
         img_center = np.hstack((img_center, img_center))
@@ -68,25 +97,27 @@ class RandomHorizontalFlip(object):
         return self.__class__.__name__ + '(p={})'.format(self.p)
     
 class HorizontalFlip(object):
-    """Horizontally flip the image with the probability p.
-
-    Args:
-        p (float): probability of the image being flipped. Default value is 0.5
+    """Horizontally Flips the Image 
+    
+    Parameters
+    ----------
+    
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Flipped image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
     """
-
     def __init__(self):
         pass
 
     def __call__(self, img, bboxes):
-        """
-        Args:
-            img (PIL Image): Image to be flipped.
-
-        Returns:
-            PIL Image: Randomly flipped image.
-        """
-        
-        
         img_center = np.array(img.shape[:2])[::-1]/2
         img_center = np.hstack((img_center, img_center))
         if random.random() < self.p:
@@ -100,10 +131,38 @@ class HorizontalFlip(object):
     
 
 class RandomScaleTranslate(object):
-    """
-
-    Args:
-        p (float): probability of the image being flipped. Default value is 0.5
+    """Randomly Scales and Translate the image    
+    
+    The image is first scaled followed by translation.Bounding boxes which have 
+    an area of less than 25% in the remaining in the transformed image is dropped.
+    The resolution is maintained, and the remaining area if any is filled by
+    black color.
+    
+    
+    
+    Parameters
+    ----------
+    scale: float or tuple(float)
+        if **float**, The image is scaled by a factor drawn 
+        randomly from a range (1 - `scale` , 1 + `scale`). If **tuple**, the `scale`
+        is drawn randomly from values specified by the tuple
+        
+    translate: float or tuple(float)
+        if **float**, The image is translated in both the x and y directions
+        by factors drawn randomly from a range (1 - `translate` , 1 + `translate`). 
+        If **tuple**, `translate` is drawn randomly from values specified by 
+        the tuple. 
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Scaled and translated image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
     """
 
     def __init__(self, scale = 0.2, translate = 0.2):
@@ -126,14 +185,7 @@ class RandomScaleTranslate(object):
         
 
     def __call__(self, img, bboxes):
-        """
-        Args:
-            img (PIL Image): Image to be flipped.
 
-        Returns:
-            PIL Image: Randomly flipped image.
-        """
-        
         
         #Chose a random digit to scale by 
         img_shape = img.shape
@@ -197,13 +249,30 @@ class RandomScaleTranslate(object):
     
 
 class RandomTranslate(object):
-    """
+    """Randomly Translates the image    
     
-    Translate an image randomly by a length (translate*dimension) of the image in both the vertical and 
-    horizontal direction
-
-    Args:
-        translate (float): Default value 0.2
+    
+    Bounding boxes which have an area of less than 25% in the remaining in the 
+    transformed image is dropped. The resolution is maintained, and the remaining
+    area if any is filled by black color.
+    
+    Parameters
+    ----------
+    translate: float or tuple(float)
+        if **float**, the image is translated by a factor drawn 
+        randomly from a range (1 - `translate` , 1 + `translate`). If **tuple**,
+        `translate` is drawn randomly from values specified by the 
+        tuple
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Translated image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
         
     """
 
@@ -220,14 +289,7 @@ class RandomTranslate(object):
 
 
     def __call__(self, img, bboxes):
-        """
-        Args:
-            img (PIL Image): Image to be flipped.
 
-        Returns:
-            PIL Image: Randomly flipped image.
-        """
-        
         
         #Chose a random digit to scale by 
         img_shape = img.shape
@@ -277,13 +339,30 @@ class RandomTranslate(object):
         return self.__class__.__name__ + '(p={})'.format(self.p)
     
 class Translate(object):
-    """
+    """Translates the image    
     
-    Translate an image randomly by a length (translate*dimension) of the image in both the vertical and 
-    horizontal direction
+    Bounding boxes which have an area of less than 25% in the remaining in the 
+    transformed image is dropped. The resolution is maintained, and the remaining
+    area if any is filled by black color.
+    
+    Parameters
+    ----------
+        
+    translate_x: float
+       The factor by which the image is translated in the x direction
 
-    Args:
-        translate (float): Default value 0.2
+    translate_y: float
+       The factor by which the image is translated in the y direction
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Scaled image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
         
     """
 
@@ -295,15 +374,7 @@ class Translate(object):
         
 
     def __call__(self, img, bboxes):
-        """
-        Args:
-            img (PIL Image): Image to be flipped.
 
-        Returns:
-            PIL Image: Randomly flipped image.
-        """
-        
-        
         #Chose a random digit to scale by 
         img_shape = img.shape
         
@@ -352,12 +423,31 @@ class Translate(object):
     
     
 class RandomScale(object):
-    """
+    """Randomly scales an image    
     
-    Randomly scale the image by a factor of (1 - scale, 1 + scale)
-
-    Args:
-        scale (float)
+    
+    Bounding boxes which have an area of less than 25% in the remaining in the 
+    transformed image is dropped. The resolution is maintained, and the remaining
+    area if any is filled by black color.
+    
+    Parameters
+    ----------
+    scale: float or tuple(float)
+        if **float**, the image is scaled by a factor drawn 
+        randomly from a range (1 - `scale` , 1 + `scale`). If **tuple**,
+        the `scale` is drawn randomly from values specified by the 
+        tuple
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Scaled image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
     """
 
     def __init__(self, scale = 0.2):
@@ -372,14 +462,7 @@ class RandomScale(object):
         
 
     def __call__(self, img, bboxes):
-        """
-        Args:
-            img (PIL Image): Image to be flipped.
 
-        Returns:
-            PIL Image: Randomly flipped image.
-        """
-        
         
         #Chose a random digit to scale by 
         
@@ -427,12 +510,28 @@ class RandomScale(object):
     
     
 class Scale(object):
-    """
+    """Scales the image    
+        
+    Bounding boxes which have an area of less than 25% in the remaining in the 
+    transformed image is dropped. The resolution is maintained, and the remaining
+    area if any is filled by black color.
     
-    Randomly scale the image by a factor of (1 - scale, 1 + scale)
-
-    Args:
-        scale (float)
+    
+    Parameters
+    ----------
+    scale: float
+        The factor by which the image is scaled.
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Scaled image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
     """
 
     def __init__(self, scale = 0.2):
@@ -440,15 +539,7 @@ class Scale(object):
         
 
     def __call__(self, img, bboxes):
-        """
-        Args:
-            img (PIL Image): Image to be flipped.
 
-        Returns:
-            PIL Image: Randomly flipped image.
-        """
-        
-        
         #Chose a random digit to scale by 
         
         img_shape = img.shape
@@ -495,10 +586,31 @@ class Scale(object):
     
 
 class RandomRotate(object):
-    """Horizontally flip the given PIL Image randomly with a given probability.
-
-    Args:
-        p (float): probability of the image being flipped. Default value is 0.5
+    """Randomly rotates an image    
+    
+    
+    Bounding boxes which have an area of less than 25% in the remaining in the 
+    transformed image is dropped. The resolution is maintained, and the remaining
+    area if any is filled by black color.
+    
+    Parameters
+    ----------
+    angle: float or tuple(float)
+        if **float**, the image is rotated by a factor drawn 
+        randomly from a range (-`angle`, `angle`). If **tuple**,
+        the `angle` is drawn randomly from values specified by the 
+        tuple
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Rotated image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
     """
 
     def __init__(self, angle):
@@ -527,7 +639,7 @@ class RandomRotate(object):
         corners = get_corners(bboxes)
         img = rotate_bound(img, self.angle)
         
-        corners, nW, nH = rotate_box(corners, self.angle, cx, cy, h, w)
+        corners = rotate_box(corners, self.angle, cx, cy, h, w)
         
         new_bbox = get_enclosing_box(corners)
         
@@ -554,11 +666,30 @@ class RandomRotate(object):
         return self.__class__.__name__ + '(p={})'.format(self.p)
     
 
-class RandomRotate(object):
-    """Horizontally flip the given PIL Image randomly with a given probability.
-
-    Args:
-        p (float): probability of the image being flipped. Default value is 0.5
+class Rotate(object):
+    """Rotates an image    
+    
+    
+    Bounding boxes which have an area of less than 25% in the remaining in the 
+    transformed image is dropped. The resolution is maintained, and the remaining
+    area if any is filled by black color.
+    
+    Parameters
+    ----------
+    angle: float
+        The angle by which the image is to be rotated 
+        
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Rotated image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
     """
 
     def __init__(self, angle):
@@ -610,10 +741,31 @@ class RandomRotate(object):
     
     
 class RandomShear(object):
-    """Horizontally flip the given PIL Image randomly with a given probability.
-
-    Args:
-        p (float): probability of the image being flipped. Default value is 0.5
+    """Randomly shears an image in horizontal direction   
+    
+    
+    Bounding boxes which have an area of less than 25% in the remaining in the 
+    transformed image is dropped. The resolution is maintained, and the remaining
+    area if any is filled by black color.
+    
+    Parameters
+    ----------
+    shear_factor: float or tuple(float)
+        if **float**, the image is sheared horizontally by a factor drawn 
+        randomly from a range (-`shear_factor`, `shear_factor`). If **tuple**,
+        the `shear_factor` is drawn randomly from values specified by the 
+        tuple
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Sheared image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
     """
 
     def __init__(self, shear_factor = 0.2):
@@ -627,15 +779,7 @@ class RandomShear(object):
         self.shear_factor = random.uniform(*self.shear_factor)
 
     def __call__(self, img, bboxes):
-        """
-        Args:
-            img (PIL Image): Image to be flipped.
 
-        Returns:
-            PIL Image: Randomly flipped image.
-            
-            
-        """
         M = np.array([[1, self.shear_factor, 0],[0,1,0]])
                 
         nW =  img.shape[1] + abs(self.shear_factor*img.shape[0])
@@ -658,10 +802,28 @@ class RandomShear(object):
         return self.__class__.__name__ + '(p={})'.format(self.p)
     
 class Shear(object):
-    """Horizontally flip the given PIL Image randomly with a given probability.
-
-    Args:
-        p (float): probability of the image being flipped. Default value is 0.5
+    """Shears an image in horizontal direction   
+    
+    
+    Bounding boxes which have an area of less than 25% in the remaining in the 
+    transformed image is dropped. The resolution is maintained, and the remaining
+    area if any is filled by black color.
+    
+    Parameters
+    ----------
+    shear_factor: float
+        Factor by which the image is sheared in the x-direction
+       
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Sheared image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Tranformed bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
     """
 
     def __init__(self, shear_factor = 0.2):
@@ -669,18 +831,10 @@ class Shear(object):
         
     
     def __call__(self, img, bboxes):
-        """
-        Args:
-            img (PIL Image): Image to be flipped.
 
-        Returns:
-            PIL Image: Randomly flipped image.
-            
-            
-        """
         M = np.array([[1, self.shear_factor, 0],[0,1,0]])
                 
-        nW =  img.shape[1] + abs(self.shear_factor*img.shape[0])
+        nW =  img.shape[1] + abs(self.sheashearsr_factor*img.shape[0])
         
         bboxes[:,[0,2]] += (bboxes[:,[1,3]]*self.shear_factor).astype(int) 
 
@@ -700,6 +854,29 @@ class Shear(object):
         return self.__class__.__name__ + '(p={})'.format(self.p)
     
 class YoloResize(object):
+    """Resize the image in accordance to `image_letter_box` function in darknet 
+    
+    The aspect ratio is maintained. The longer side is resized to the input 
+    size of the network, while the remaining space on the shorter side is filled 
+    with black color. **This should be the last transform**
+    
+    
+    Parameters
+    ----------
+    inp_dim : tuple(int)
+        tuple containing the size to which the image will be resized.
+        
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Sheared image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Resized bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
+    """
     
     def __init__(self, inp_dim):
         self.inp_dim = inp_dim
@@ -711,10 +888,8 @@ class YoloResize(object):
 
         scale = min(self.inp_dim/h, self.inp_dim/w)
         bboxes *= (scale)
-
         new_w = scale*w
         new_h = scale*h
-        
         inp_dim = self.inp_dim   
         
         del_h = (inp_dim - new_h)/2

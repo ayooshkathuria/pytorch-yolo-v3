@@ -165,7 +165,7 @@ for x, ann in toyloader:
     x = cv2.cvtColor(x.astype(np.uint8), cv2.COLOR_BGR2RGB)
     
     for cord in ann:
-        x, pt1, pt2 = draw_rect(x, cord)
+        x = draw_rect(x, cord)
         
     plt.imshow(x)
 #    plt.imshow(cv2.imread("test.jpg"))
