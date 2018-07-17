@@ -11,7 +11,6 @@ a = os.path.join(os.path.realpath("."), "data_aug")
 sys.path.append(a)
 from data_aug.bbox_util import *
 
-a = 1
 
 class Sequence(object):
 
@@ -190,6 +189,9 @@ class RandomScaleTranslate(object):
         #Chose a random digit to scale by 
         img_shape = img.shape
         
+        img = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_RGB2BGR)
+
+        
     
         resize_scale = 1 + self.scale
         
@@ -230,9 +232,9 @@ class RandomScaleTranslate(object):
         bboxes -= [corner_x, corner_y, corner_x, corner_y]
         
         
-        bboxes = clip_box(bboxes, [0,0,img_shape[1], img_shape[0]], 0.25)
+        bboxes = clip_box(bboxes, [0,0,img_shape[1], img_shape[0]], 0.5)
         
-
+        img = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2RGB)
         
 
         
@@ -613,16 +615,16 @@ class RandomRotate(object):
         
     """
 
-    def __init__(self, angle):
+    def __init__(self, angle = 10):
         self.angle = angle
+        
         if type(self.angle) == tuple:
             assert len(self.angle) == 2, "Invalid range"   
         else:
             self.angle = (-self.angle, self.angle)
             
-        self.angle = random.uniform(*self.angle)
-
     def __call__(self, img, bboxes):
+        
         """
         Args:
             img (PIL Image): Image to be flipped.
@@ -633,13 +635,15 @@ class RandomRotate(object):
             
         """
         
+        angle = random.uniform(*self.angle)
+
         w,h = img.shape[1], img.shape[0]
         cx, cy = w//2, h//2
         
         corners = get_corners(bboxes)
-        img = rotate_bound(img, self.angle)
+        img = rotate_bound(img, angle)
         
-        corners = rotate_box(corners, self.angle, cx, cy, h, w)
+        corners = rotate_box(corners, angle, cx, cy, h, w)
         
         new_bbox = get_enclosing_box(corners)
         
@@ -899,5 +903,6 @@ class YoloResize(object):
         
         bboxes += add_matrix
         
-
+        img = img.astype(np.uint8)
+        
         return img, bboxes

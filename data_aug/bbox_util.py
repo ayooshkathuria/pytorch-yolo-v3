@@ -22,13 +22,14 @@ def draw_rect(im, cords):
         numpy image with bounding boxes drawn on it
         
     """
+    for cord in cords:
         
-    pt1, pt2 = (cords[0], cords[1]) , (cords[2], cords[3])
-            
-    pt1 = int(pt1[0]), int(pt1[1])
-    pt2 = int(pt2[0]), int(pt2[1])
-
-    im = cv2.rectangle(im.copy(), pt1, pt2, [0,0,0], int(max(im.shape[:2])/150))
+        pt1, pt2 = (cord[0], cord[1]) , (cord[2], cord[3])
+                
+        pt1 = int(pt1[0]), int(pt1[1])
+        pt2 = int(pt2[0]), int(pt2[1])
+    
+        im = cv2.rectangle(im.copy(), pt1, pt2, [0,0,0], int(max(im.shape[:2])/200))
     return im
 
 def clip_box(bbox, clip_box, alpha):
