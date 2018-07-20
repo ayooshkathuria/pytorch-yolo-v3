@@ -155,7 +155,7 @@ class toyset(Dataset):
     
 #tran = Sequence([RandomRotate(10)])
 
-tran = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(), RandomRotate(10), RandomShear(), YoloResize(608)])
+tran = Sequence([RandomHSV(40, 40, 30),RandomHorizontalFlip(), RandomScaleTranslate(), RandomRotate(10), RandomShear(), YoloResize(608)])
 
 toyloader = DataLoader(toyset("data_aug/demo.jpeg", transform = tran))
 

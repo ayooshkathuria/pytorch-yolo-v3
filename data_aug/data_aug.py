@@ -119,9 +119,8 @@ class HorizontalFlip(object):
     def __call__(self, img, bboxes):
         img_center = np.array(img.shape[:2])[::-1]/2
         img_center = np.hstack((img_center, img_center))
-        if random.random() < self.p:
-            img =  img[:,::-1,:]
-            bboxes[:,[0,2]] += 2*(img_center[[0,2]] - bboxes[:,[0,2]])
+        img =  img[:,::-1,:]
+        bboxes[:,[0,2]] += 2*(img_center[[0,2]] - bboxes[:,[0,2]])
             
         return img, bboxes
 
@@ -177,13 +176,13 @@ class RandomScaleTranslate(object):
         else:
             self.translate = (-self.translate, self.translate)
     
-        self.scale= random.uniform(*self.scale)
-        self.translate_factor_x = random.uniform(*self.translate)
-        self.translate_factor_y = random.uniform(*self.translate)
-            
-        
+
 
     def __call__(self, img, bboxes):
+        
+        scale = random.uniform(*self.scale)
+        translate_factor_x = random.uniform(*self.translate)
+        translate_factor_y = random.uniform(*self.translate)
 
         
         #Chose a random digit to scale by 
@@ -193,7 +192,7 @@ class RandomScaleTranslate(object):
 
         
     
-        resize_scale = 1 + self.scale
+        resize_scale = 1 + scale
         
         if resize_scale > 1:
             img=  cv2.resize(img, None, fx = resize_scale, fy = resize_scale)
@@ -210,8 +209,8 @@ class RandomScaleTranslate(object):
         
         #Get the center co-ordinates of the shifted Image
         cx, cy = img.shape[1]/2, img.shape[0]/2
-        cx += self.translate_factor_x*img.shape[1]
-        cy += self.translate_factor_y*img.shape[0]
+        cx += translate_factor_x*img.shape[1]
+        cy += translate_factor_y*img.shape[0]
         
 
         #get the top-left corner co-ordinates of the shifted box 
@@ -290,9 +289,7 @@ class RandomTranslate(object):
         self.translate_factor_y = random.uniform(*self.translate)
 
 
-    def __call__(self, img, bboxes):
-
-        
+    def __call__(self, img, bboxes):        
         #Chose a random digit to scale by 
         img_shape = img.shape
         
@@ -460,7 +457,7 @@ class RandomScale(object):
         else:
             self.scale = (-self.scale, self.scale)
         
-        self.scale = random.uniform(*self.scale)
+
         
 
     def __call__(self, img, bboxes):
@@ -470,7 +467,8 @@ class RandomScale(object):
         
         img_shape = img.shape
         
-        resize_scale = 1 + self.scale
+        scale = random.uniform(*self.scale)
+        resize_scale = 1 + scale
         
         if resize_scale > 1:
             img=  cv2.resize(img, None, fx = resize_scale, fy = resize_scale)
@@ -780,18 +778,22 @@ class RandomShear(object):
         else:
             self.shear_factor = (-self.shear_factor, self.shear_factor)
         
-        self.shear_factor = random.uniform(*self.shear_factor)
+        shear_factor = random.uniform(*self.shear_factor)
 
     def __call__(self, img, bboxes):
+        
+        shear_factor = random.uniform(*self.shear_factor)
 
-        M = np.array([[1, self.shear_factor, 0],[0,1,0]])
+
+        M = np.array([[1, shear_factor, 0],[0,1,0]])
                 
-        nW =  img.shape[1] + abs(self.shear_factor*img.shape[0])
+        nW =  img.shape[1] + abs(shear_factor*img.shape[0])
         
-        bboxes[:,[0,2]] += (bboxes[:,[1,3]]*self.shear_factor).astype(int) 
+        bboxes[:,[0,2]] += (bboxes[:,[1,3]]*shear_factor).astype(int) 
+        
 
         
-        if self.shear_factor < 0:
+        if shear_factor < 0:
             M[0,2] += (nW - img.shape[1])
             bboxes[:,[0,2]] += (nW - img.shape[1])
         
@@ -906,3 +908,94 @@ class YoloResize(object):
         img = img.astype(np.uint8)
         
         return img, bboxes
+
+
+class RandomHSV(object):
+    """HSV Transform to vary hue saturation and brightness
+    
+    Hue has a range of 0-179
+    Saturation and Brightness have a range of 0-255. 
+    Chose the amount you want to change thhe above quantities accordingly. 
+    
+    
+    
+    
+    Parameters
+    ----------
+    hue : None or float or tuple (float)
+        If None, the hue of the image is left unchanged. If float, 
+        a random float is uniformly sampled from (-hue, hue) and added to the 
+        hue of the image. If tuple, the float is sampled from the range 
+        specified by the tuple.   
+        
+    saturation : None or float or tuple(float)
+        If None, the saturation of the image is left unchanged. If float, 
+        a random float is uniformly sampled from (-saturation, saturation) 
+        and added to the hue of the image. If tuple, the float is sampled
+        from the range  specified by the tuple.   
+        
+    brightness : None or float or tuple(float)
+        If None, the brightness of the image is left unchanged. If float, 
+        a random float is uniformly sampled from (-brightness, brightness) 
+        and added to the hue of the image. If tuple, the float is sampled
+        from the range  specified by the tuple.   
+    
+    Returns
+    -------
+    
+    numpy.ndaaray
+        Transformed image in the numpy format of shape `HxWxC`
+    
+    numpy.ndarray
+        Resized bounding box co-ordinates of the format `n x 4` where n is 
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+        
+    """
+    
+    def __init__(self, hue = None, saturation = None, brightness = None):
+        if hue:
+            self.hue = hue 
+        else:
+            self.hue = 0
+            
+        if saturation:
+            self.saturation = saturation 
+        else:
+            self.saturation = 0
+            
+        if brightness:
+            self.brightness = brightness
+        else:
+            self.brightness = 0
+            
+            
+
+        if type(self.hue) != tuple:
+            self.hue = (-self.hue, self.hue)
+            
+        if type(self.saturation) != tuple:
+            self.saturation = (-self.saturation, self.saturation)
+        
+        if type(brightness) != tuple:
+            self.brightness = (-self.brightness, self.brightness)
+    
+    def __call__(self, img, bboxes):
+
+        hue = random.randint(*self.hue)
+        saturation = random.randint(*self.saturation)
+        brightness = random.randint(*self.brightness)
+        
+        img = img.astype(int)
+        
+        a = np.array([hue, saturation, brightness]).astype(int)
+        img += np.reshape(a, (1,1,3))
+        
+        img = np.clip(img, 0, 255)
+        img[:,:,0] = np.clip(img[:,:,0],0, 179)
+        
+        img = img.astype(np.uint8)
+
+        
+        
+        return img, bboxes
+    

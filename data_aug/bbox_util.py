@@ -22,6 +22,8 @@ def draw_rect(im, cords):
         numpy image with bounding boxes drawn on it
         
     """
+    
+    cords = cords.reshape(-1,4)
     for cord in cords:
         
         pt1, pt2 = (cord[0], cord[1]) , (cord[2], cord[3])

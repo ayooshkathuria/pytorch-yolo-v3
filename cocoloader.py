@@ -65,12 +65,29 @@ def trasform_annotation(x):
 transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(448)])
     
 i = 0
+boxes = []
+li = []
+#for x in coco_loader:
+#    x = trasform_annotation(x)
+#    a = transforms(x[0], x[1])
+#    im = draw_rect(a[0], a[1])
+#    plt.imshow(im)	
+#    plt.show()
+#    i += 1
+#    if i == 10:
+#        break
+
 for x in coco_loader:
     x = trasform_annotation(x)
-    a = transforms(x[0], x[1])
-    im = draw_rect(a[0], a[1])
-    plt.imshow(im)	
-    plt.show()
-    i += 1
-    if i == 10:
-        break
+    bboxes = x[1]
+    bbox_dims_h = bboxes[:,3] - bboxes[:,1]
+    bbox_dims_w = bboxes[:,2] - bboxes[:,0]
+    
+
+    bbox_dims = np.stack((bbox_dims_w, bbox_dims_h)).T
+    
+    li.append(bbox_dims)
+
+
+dims = np.vstack(li)
+    

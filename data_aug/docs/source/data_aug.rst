@@ -7,8 +7,15 @@ data_aug contains common image and bounding boxes transforms. They can be chaine
 
 .. autoclass:: Sequence
 
-Randomised Transforms
----------------------
+Transforms Not Involving change in Bounding Boxes
+-------------------------------------------------
+These transforms should be applied before the ones involving change in bounding boxes
+
+.. autoclass:: RandomHSV
+
+
+Transforms Involving Change in Bounding Boxes
+---------------------------------------------
 
 
 .. autoclass:: RandomHorizontalFlip
@@ -22,9 +29,6 @@ Randomised Transforms
 .. autoclass:: RandomShear
 
 .. autoclass:: RandomTranslate
-
-Non-Randomised Transforms
--------------------------
 
 .. autoclass:: HorizontalFlip
 
