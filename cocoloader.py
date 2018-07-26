@@ -6,6 +6,7 @@ import pickle as pkl
 import matplotlib.pyplot as plt
 from data_aug.bbox_util import draw_rect
 from data_aug.data_aug import *
+from kmeans.kmeans import *
 
 class CocoDataset(CocoDetection):
     def __init__(self, root, annFile, det_transforms = None):
@@ -24,7 +25,7 @@ class CocoDataset(CocoDetection):
 #print(filename)
 #print(os.path.exists(filename))
 
-#cocoloader = CocoDataset(root = "../cocoapi/train2017", annFile = "../cocoapi/annotations/instances_train2017.json")
+cocoloader = CocoDataset(root = "../COCO/train2017", annFile = "../COCO/instances_train2017.json")
 
 def tiny_coco(cocoloader, num):
     i = 0
@@ -40,7 +41,7 @@ def tiny_coco(cocoloader, num):
     pkl.dump(li, open("COCO_{}k.pkl.format(num)", "wb"))
 
 
-coco_loader = pkl.load(open("COCO_100.pkl", "rb"))
+#coco_loader = pkl.load(open("COCO_100.pkl", "rb"))
 
 def trasform_annotation(x):
     #convert the PIL image to a numpy array
@@ -63,10 +64,9 @@ def trasform_annotation(x):
     
     
 transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(448)])
-    
-i = 0
-boxes = []
-li = []
+
+assert False    
+
 #for x in coco_loader:
 #    x = trasform_annotation(x)
 #    a = transforms(x[0], x[1])
@@ -77,17 +77,72 @@ li = []
 #    if i == 10:
 #        break
 
-for x in coco_loader:
-    x = trasform_annotation(x)
-    bboxes = x[1]
-    bbox_dims_h = bboxes[:,3] - bboxes[:,1]
-    bbox_dims_w = bboxes[:,2] - bboxes[:,0]
+
+# KMeans --------------------------------------------------------------------------------------------
+
+def get_bbox_dims(coco_loader):
+    li = []
+    for x in coco_loader:
+        x = trasform_annotation(x)
+        bboxes = x[1]
+        bbox_dims_h = bboxes[:,3] - bboxes[:,1]
+        bbox_dims_w = bboxes[:,2] - bboxes[:,0]
+        
+    
+        bbox_dims = np.stack((bbox_dims_w, bbox_dims_h)).T
+        
+        li.append(bbox_dims)
+
+
+    dims = np.vstack(li)
+    return dims 
+
+
+a = get_bbox_dims(coco_loader)
     
 
-    bbox_dims = np.stack((bbox_dims_w, bbox_dims_h)).T
+def YOLO_kmeans(points):
+    centroids = random.sample(range(points.shape[0]), 5)
+    centroids = points[centroids]
+
+    for iter in range(10):
+        clusters = get_clusters(points, centroids)
+        
+        for k in range(5):
+            arr = points[clusters == k]
+            centroids[k] = arr.mean(0)
+            
+    return centroids, clusters 
+            
+        
+        
+        
+        
     
-    li.append(bbox_dims)
-
-
-dims = np.vstack(li)
+        
+        
+def get_clusters(points, centroids):
+    
+    points = points.reshape(points.shape[0], 1, points.shape[1])
+    
+    centroids = centroids.reshape(centroids.shape[0], 1, centroids.shape[1])
+    centroids = centroids.transpose((1,0,2))
+    
+    min_w  = np.minimum(points[:,:,0], centroids[:,:,0])
+    min_h  = np.minimum(points[:,:,1], centroids[:,:,1])
+    
+    a_points = points[:,:,0]*points[:,:,1]
+    c_points = centroids[:,:,0]*centroids[:,:,1]
+    
+    iou = (min_h*min_w)/(a_points + c_points - min_h*min_w)
+    
+    clusters = np.argmax(iou, 1)
+                         
+    return clusters
+    
+    
+    
+   
+b = YOLO_kmeans(a)
+    
     
