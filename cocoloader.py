@@ -6,7 +6,7 @@ import pickle as pkl
 import matplotlib.pyplot as plt
 from data_aug.bbox_util import draw_rect
 from data_aug.data_aug import *
-from kmeans.kmeans import *
+#from kmeans.kmeans import *
 
 class CocoDataset(CocoDetection):
     def __init__(self, root, annFile, det_transforms = None):
@@ -25,7 +25,7 @@ class CocoDataset(CocoDetection):
 #print(filename)
 #print(os.path.exists(filename))
 
-cocoloader = CocoDataset(root = "../COCO/train2017", annFile = "../COCO/instances_train2017.json")
+cocoloader = CocoDataset(root = "COCO/train2017", annFile = "COCO/instances_train2017.json")
 
 def tiny_coco(cocoloader, num):
     i = 0
@@ -33,12 +33,32 @@ def tiny_coco(cocoloader, num):
     
     for x in cocoloader:
         print(i)
+        
         li.append(x)
         i += 1
         if i > num - 1:
             break
     num = num / 1000
     pkl.dump(li, open("COCO_{}k.pkl.format(num)", "wb"))
+
+
+def get_num_boxes(cocoloader):
+    num_boxes = 0
+    for x in cocoloader:
+        x = trasform_annotation(x)
+        bboxes = x[1]
+        bbox_dims_h = bboxes[:,3] - bboxes[:,1]
+        bbox_dims_w = bboxes[:,2] - bboxes[:,0]
+        
+    
+        bbox_dims = np.stack((bbox_dims_w, bbox_dims_h)).T
+        
+        num_boxes += bbox_dims.shape[0]
+    
+    return num_boxes
+
+
+        
 
 
 #coco_loader = pkl.load(open("COCO_100.pkl", "rb"))
@@ -61,10 +81,40 @@ def trasform_annotation(x):
     category_ids = [a["category_id"] for a in x[1]]
     
     return image, boxes, category_ids
-    
-    
-transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(448)])
 
+    
+#transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(448)])
+
+
+
+
+
+
+def pickle_coco(cocoloader):
+    li = []
+    
+    
+    i = 0
+    for x in cocoloader:
+        x = trasform_annotation(x)
+        bboxes = x[1]
+        bbox_dims_h = bboxes[:,3] - bboxes[:,1]
+        bbox_dims_w = bboxes[:,2] - bboxes[:,0]
+        
+    
+        bbox_dims = np.stack((bbox_dims_w, bbox_dims_h)).T
+        
+        li.append(bbox_dims)        
+        
+        print('Image {} of {}'.format(i, len(cocoloader)))
+        
+        i += 1
+        
+    li = np.vstack(li)
+    pkl.dump(li, open("Entire_dims.pkl", "wb"))
+    
+
+pickle_coco(cocoloader)
 assert False    
 
 #for x in coco_loader:
