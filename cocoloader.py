@@ -6,6 +6,8 @@ import pickle as pkl
 import matplotlib.pyplot as plt
 from data_aug.bbox_util import draw_rect
 from data_aug.data_aug import *
+import time
+import random
 #from kmeans.kmeans import *
 
 class CocoDataset(CocoDetection):
@@ -20,12 +22,6 @@ class CocoDataset(CocoDetection):
         return super().__getitem__(idx)
     
 
-#dirname = os.path.realpath("..")
-#filename = os.path.join(dirname, "cocoapi/train2017")
-#print(filename)
-#print(os.path.exists(filename))
-
-cocoloader = CocoDataset(root = "COCO/train2017", annFile = "COCO/instances_train2017.json")
 
 def tiny_coco(cocoloader, num):
     i = 0
@@ -58,12 +54,8 @@ def get_num_boxes(cocoloader):
     return num_boxes
 
 
-        
 
-
-#coco_loader = pkl.load(open("COCO_100.pkl", "rb"))
-
-def trasform_annotation(x):
+def transform_annotation(x):
     #convert the PIL image to a numpy array
     image = np.array(x[0])
     
@@ -83,14 +75,10 @@ def trasform_annotation(x):
     return image, boxes, category_ids
 
     
-#transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(448)])
 
 
 
-
-
-
-def pickle_coco(cocoloader):
+def pickle_coco_dims(cocoloader):
     li = []
     
     
@@ -112,87 +100,40 @@ def pickle_coco(cocoloader):
         
     li = np.vstack(li)
     pkl.dump(li, open("Entire_dims.pkl", "wb"))
-    
-
-pickle_coco(cocoloader)
-assert False    
-
-#for x in coco_loader:
-#    x = trasform_annotation(x)
-#    a = transforms(x[0], x[1])
-#    im = draw_rect(a[0], a[1])
-#    plt.imshow(im)	
-#    plt.show()
-#    i += 1
-#    if i == 10:
-#        break
 
 
-# KMeans --------------------------------------------------------------------------------------------
 
-def get_bbox_dims(coco_loader):
+def get_coco_sample(cocoloader):
     li = []
-    for x in coco_loader:
-        x = trasform_annotation(x)
-        bboxes = x[1]
-        bbox_dims_h = bboxes[:,3] - bboxes[:,1]
-        bbox_dims_w = bboxes[:,2] - bboxes[:,0]
-        
+    i = 0
+    for x in cocoloader:    
+        x = transform_annotation(x)
+        if i == 9:
+            break
+        i+= 1
+        li.append(x)
+    pkl.dump(li, open("Coco_sample.pkl", "wb"))
     
-        bbox_dims = np.stack((bbox_dims_w, bbox_dims_h)).T
         
-        li.append(bbox_dims)
 
+transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(448)])
 
-    dims = np.vstack(li)
-    return dims 
+#i = 0
+#coco_loader = CocoDataset(root = "COCO/train2017", annFile = "COCO/instances_train2017.json", det_transforms = transforms)
 
+#    
+#get_coco_sample(coco_loader)
 
-a = get_bbox_dims(coco_loader)
-    
-
-def YOLO_kmeans(points):
-    centroids = random.sample(range(points.shape[0]), 5)
-    centroids = points[centroids]
-
-    for iter in range(10):
-        clusters = get_clusters(points, centroids)
-        
-        for k in range(5):
-            arr = points[clusters == k]
-            centroids[k] = arr.mean(0)
-            
-    return centroids, clusters 
-            
-        
-        
-        
-        
-    
-        
-        
-def get_clusters(points, centroids):
-    
-    points = points.reshape(points.shape[0], 1, points.shape[1])
-    
-    centroids = centroids.reshape(centroids.shape[0], 1, centroids.shape[1])
-    centroids = centroids.transpose((1,0,2))
-    
-    min_w  = np.minimum(points[:,:,0], centroids[:,:,0])
-    min_h  = np.minimum(points[:,:,1], centroids[:,:,1])
-    
-    a_points = points[:,:,0]*points[:,:,1]
-    c_points = centroids[:,:,0]*centroids[:,:,1]
-    
-    iou = (min_h*min_w)/(a_points + c_points - min_h*min_w)
-    
-    clusters = np.argmax(iou, 1)
-                         
-    return clusters
-    
-    
-    
-   
-b = YOLO_kmeans(a)
-    
-    
+a = time.time()
+coco_loader = pkl.load(open("Coco_sample.pkl", "rb"))
+b = time.time()
+print(b-a)
+i = 0
+for x in coco_loader:
+    a = transforms(x[0], x[1])
+    im = draw_rect(a[0], a[1])
+    plt.imshow(im)	
+    plt.show()
+    i += 1
+    if i == 10:
+        break    
