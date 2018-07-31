@@ -155,21 +155,20 @@ class toyset(Dataset):
     
 #tran = Sequence([RandomRotate(10)])
 
-tran = Sequence([RandomHSV(40, 40, 30),RandomHorizontalFlip(), RandomScaleTranslate(), RandomRotate(10), RandomShear(), YoloResize(608)])
+#tran = Sequence([RandomHSV(40, 40, 30),RandomHorizontalFlip(), RandomScaleTranslate(), RandomRotate(10), RandomShear(), YoloResize(608)])
 
-toyloader = DataLoader(toyset("data_aug/demo.jpeg", transform = tran))
+#toyloader = DataLoader(toyset("data_aug/demo.jpeg", transform = tran))
 
-for x, ann in toyloader:
-    x = x.squeeze().numpy()
-    ann = ann.squeeze().numpy()
-    x = cv2.cvtColor(x.astype(np.uint8), cv2.COLOR_BGR2RGB)
-    
-    for cord in ann:
-        x = draw_rect(x, cord)
-        
-    plt.imshow(x)
-#    plt.imshow(cv2.imread("test.jpg"))
-    cv2.imwrite("test.png", x)
-    plt.show() 
+#for x, ann in toyloader:
+#    x = x.squeeze().numpy()
+#    ann = ann.squeeze().numpy()
+#    x = cv2.cvtColor(x.astype(np.uint8), cv2.COLOR_BGR2RGB)
+#    
+#    for cord in ann:
+#        x = draw_rect(x, cord)
+#        
+#    plt.imshow(x)
+#    cv2.imwrite("test.png", x)
+#    plt.show() 
     
     

@@ -8,18 +8,25 @@ from data_aug.bbox_util import draw_rect
 from data_aug.data_aug import *
 import time
 import random
+from torch.utils.data import DataLoader
+
 #from kmeans.kmeans import *
 
 class CocoDataset(CocoDetection):
     def __init__(self, root, annFile, det_transforms = None):
         super().__init__(root, annFile, None, None)
         self.det_tranforms = det_transforms
+        self.inp_dim = 416
     
     def __len__(self):
         return super().__len__()
     
+    def set_inp_dim(self, inp_dim):
+        self.inp_dim = inp_dim
+    
     def __getitem__(self, idx):
         return super().__getitem__(idx)
+        
     
 
 
@@ -107,7 +114,6 @@ def get_coco_sample(cocoloader):
     li = []
     i = 0
     for x in cocoloader:    
-        x = transform_annotation(x)
         if i == 9:
             break
         i+= 1
@@ -116,24 +122,4 @@ def get_coco_sample(cocoloader):
     
         
 
-transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(448)])
 
-#i = 0
-#coco_loader = CocoDataset(root = "COCO/train2017", annFile = "COCO/instances_train2017.json", det_transforms = transforms)
-
-#    
-#get_coco_sample(coco_loader)
-
-a = time.time()
-coco_loader = pkl.load(open("Coco_sample.pkl", "rb"))
-b = time.time()
-print(b-a)
-i = 0
-for x in coco_loader:
-    a = transforms(x[0], x[1])
-    im = draw_rect(a[0], a[1])
-    plt.imshow(im)	
-    plt.show()
-    i += 1
-    if i == 10:
-        break    
