@@ -101,4 +101,3 @@ colors = np.array(list(map(lambda x: color_dict[x], b[1])))
 plt.scatter(a[:,0], a[:,1], c = colors, s  = 0.001)
 plt.scatter(b[0][:,0], b[0][:,1], s = 15, c = "black")
 plt.show()
-fro

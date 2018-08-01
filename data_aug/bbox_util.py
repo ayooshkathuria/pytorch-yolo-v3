@@ -31,7 +31,7 @@ def draw_rect(im, cords):
         pt1 = int(pt1[0]), int(pt1[1])
         pt2 = int(pt2[0]), int(pt2[1])
     
-        im = cv2.rectangle(im.copy(), pt1, pt2, [0,0,0], int(max(im.shape[:2])/200))
+        im = cv2.rectangle(im.copy(), pt1, pt2, [255,255,255], int(max(im.shape[:2])/200))
     return im
 
 def clip_box(bbox, clip_box, alpha):
@@ -63,12 +63,12 @@ def clip_box(bbox, clip_box, alpha):
     
     """
     ar_ = (bbox_area(bbox))
-    x_min = np.maximum(bbox[:,0], clip_box[0])
-    y_min = np.maximum(bbox[:,1], clip_box[1])
-    x_max = np.minimum(bbox[:,2], clip_box[2])
-    y_max = np.minimum(bbox[:,3], clip_box[3])
+    x_min = np.maximum(bbox[:,0], clip_box[0]).reshape(-1,1)
+    y_min = np.maximum(bbox[:,1], clip_box[1]).reshape(-1,1)
+    x_max = np.minimum(bbox[:,2], clip_box[2]).reshape(-1,1)
+    y_max = np.minimum(bbox[:,3], clip_box[3]).reshape(-1,1)
     
-    bbox = np.vstack((x_min, y_min, x_max, y_max)).T
+    bbox = np.hstack((x_min, y_min, x_max, y_max, bbox[:,4:]))
     
     delta_area = ((ar_ - bbox_area(bbox))/ar_)
     
@@ -270,12 +270,12 @@ def get_enclosing_box(corners):
     x_ = corners[:,[0,2,4,6]]
     y_ = corners[:,[1,3,5,7]]
     
-    xmin = np.min(x_,1)
-    ymin = np.min(y_,1)
-    xmax = np.max(x_,1)
-    ymax = np.max(y_,1)
+    xmin = np.min(x_,1).reshape(-1,1)
+    ymin = np.min(y_,1).reshape(-1,1)
+    xmax = np.max(x_,1).reshape(-1,1)
+    ymax = np.max(y_,1).reshape(-1,1)
     
-    final = np.vstack((xmin, ymin, xmax, ymax)).T
+    final = np.hstack((xmin, ymin, xmax, ymax,corners[:,8:]))
     
     return final
 

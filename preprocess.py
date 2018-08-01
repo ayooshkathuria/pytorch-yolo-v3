@@ -131,9 +131,9 @@ class toyset(Dataset):
             temp = [float(x) for x in temp]
             annots_.append(temp)
             
+
+
         annots_ = np.array(annots_)
-        
-        
         annots_transform = np.zeros(annots_.shape)
         
         annots_transform[:,0] = annots_[:,0] - annots_[:,2]/2
@@ -144,14 +144,22 @@ class toyset(Dataset):
         
         im_dim = np.array([image.shape[1], image.shape[0], image.shape[1], image.shape[0]])
         
-        annots_transform *= im_dim
+        
+        cls = np.array([0,0,0,1]).reshape(-1,1)
+        
+        
+        annots_transform  = np.hstack((annots_transform, cls.reshape(-1,1))) 
+        
+        annots_transform[:,:4] *= im_dim
 
+        
+        a = "fg"
         if self.transform:
-            image, annots = self.transform(image, annots_transform)
+            image, annots_transform = self.transform(image, annots_transform, a)
         
         image = image.copy()
         
-        return image, annots
+        return image, annots_transform
     
 #tran = Sequence([RandomRotate(10)])
 

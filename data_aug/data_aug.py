@@ -44,7 +44,7 @@ class Sequence(object):
         self.probs = probs
         
     
-    def __call__(self, images, bboxes):
+    def __call__(self, images, bboxes,a):
         for i, augmentation in enumerate(self.augmentations):
             if type(self.probs) == list:
                 prob = self.probs[i]
@@ -53,7 +53,6 @@ class Sequence(object):
                 
             if random.random() < prob:
                 images, bboxes = augmentation(images, bboxes)
-        
         return images, bboxes
 
 class RandomHorizontalFlip(object):
@@ -199,7 +198,7 @@ class RandomScaleTranslate(object):
         else:
             img = cv2.resize(img, None, fx = resize_scale, fy = resize_scale, interpolation = cv2.INTER_AREA)
         
-        bboxes *= [resize_scale, resize_scale, resize_scale, resize_scale]
+        bboxes[:,:4] *= [resize_scale, resize_scale, resize_scale, resize_scale]
         
         #translate the image
         
@@ -228,15 +227,16 @@ class RandomScaleTranslate(object):
         canvas[orig_box_cords[0]:orig_box_cords[2], orig_box_cords[1]:orig_box_cords[3],:] = mask
         img = canvas
         
-        bboxes -= [corner_x, corner_y, corner_x, corner_y]
         
+        bboxes[:,:4] -= [corner_x, corner_y, corner_x, corner_y]
         
         bboxes = clip_box(bboxes, [0,0,img_shape[1], img_shape[0]], 0.5)
         
+
         img = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2RGB)
         
 
-        
+
         return img, bboxes
         
     def __repr__(self):
@@ -321,12 +321,11 @@ class RandomTranslate(object):
         canvas[orig_box_cords[0]:orig_box_cords[2], orig_box_cords[1]:orig_box_cords[3],:] = mask
         img = canvas
         
-        bboxes -= [corner_x, corner_y, corner_x, corner_y]
+        bboxes[:,:4] -= [corner_x, corner_y, corner_x, corner_y]
         
         
         bboxes = clip_box(bboxes, [0,0,img_shape[1], img_shape[0]], 0.25)
         
-        print(bboxes.shape)
 
         
 
@@ -403,12 +402,11 @@ class Translate(object):
         canvas[orig_box_cords[0]:orig_box_cords[2], orig_box_cords[1]:orig_box_cords[3],:] = mask
         img = canvas
         
-        bboxes -= [corner_x, corner_y, corner_x, corner_y]
+        bboxes[:,:4] -= [corner_x, corner_y, corner_x, corner_y]
         
         
         bboxes = clip_box(bboxes, [0,0,img_shape[1], img_shape[0]], 0.25)
         
-        print(bboxes.shape)
 
         
 
@@ -475,31 +473,7 @@ class RandomScale(object):
         else:
             img = cv2.resize(img, None, fx = resize_scale, fy = resize_scale, interpolation = cv2.INTER_AREA)
         
-        bboxes *= [resize_scale, resize_scale, resize_scale, resize_scale]
-        
-        
-        
-        #Get the center co-ordinates of the shifted Image
-        cx, cy = img.shape[1]/2, img.shape[0]/2
-
-
-        #get the top-left corner co-ordinates of the shifted box 
-        corner_x = int(cx) - int(img.shape[1]/2)
-        corner_y = int(cy) - int(img.shape[0]/2)
-        
-        #change the origin to the top-left corner of the translated box
-        orig_box_cords =  [max(0,-corner_y), max(-corner_x,0), min(img_shape[0], -corner_y + img.shape[0]), min(img_shape[1],-corner_x + img.shape[1])]
-
-        
-        
-        canvas = np.zeros(img_shape) 
-        canvas[:,:] = [127,127,127]
-        mask = img[max(corner_y, 0):min(img.shape[0], corner_y + img_shape[0]), max(corner_x, 0):min(img.shape[1], corner_x + img_shape[1]),:]
-        canvas[orig_box_cords[0]:orig_box_cords[2], orig_box_cords[1]:orig_box_cords[3],:] = mask
-        img = canvas
-        
-        bboxes -= [corner_x, corner_y, corner_x, corner_y]
-        
+        bboxes[:,:4] *= [resize_scale, resize_scale, resize_scale, resize_scale]
         
         bboxes = clip_box(bboxes, [0,0,img_shape[1], img_shape[0]], 0.25)
 
@@ -551,30 +525,7 @@ class Scale(object):
         else:
             img = cv2.resize(img, None, fx = resize_scale, fy = resize_scale, interpolation = cv2.INTER_AREA)
         
-        bboxes *= [resize_scale, resize_scale, resize_scale, resize_scale]
-        
-        
-        
-        #Get the center co-ordinates of the shifted Image
-        cx, cy = img.shape[1]/2, img.shape[0]/2
-
-
-        #get the top-left corner co-ordinates of the shifted box 
-        corner_x = int(cx) - int(img.shape[1]/2)
-        corner_y = int(cy) - int(img.shape[0]/2)
-        
-        #change the origin to the top-left corner of the translated box
-        orig_box_cords =  [max(0,-corner_y), max(-corner_x,0), min(img_shape[0], -corner_y + img.shape[0]), min(img_shape[1],-corner_x + img.shape[1])]
-
-        
-        
-        canvas = np.zeros(img_shape) 
-        canvas[:,:] = [127,127,127]
-        mask = img[max(corner_y, 0):min(img.shape[0], corner_y + img_shape[0]), max(corner_x, 0):min(img.shape[1], corner_x + img_shape[1]),:]
-        canvas[orig_box_cords[0]:orig_box_cords[2], orig_box_cords[1]:orig_box_cords[3],:] = mask
-        img = canvas
-        
-        bboxes -= [corner_x, corner_y, corner_x, corner_y]
+        bboxes[:,:4] *= [resize_scale, resize_scale, resize_scale, resize_scale]
         
         
         bboxes = clip_box(bboxes, [0,0,img_shape[1], img_shape[0]], 0.25)
@@ -639,11 +590,18 @@ class RandomRotate(object):
         cx, cy = w//2, h//2
         
         corners = get_corners(bboxes)
+        
+        corners = np.hstack((corners, bboxes[:,4:]))
+
         img = rotate_bound(img, angle)
         
-        corners = rotate_box(corners, angle, cx, cy, h, w)
+        corners[:,:8] = rotate_box(corners[:,:8], angle, cx, cy, h, w)
+        
+        
+        
         
         new_bbox = get_enclosing_box(corners)
+        
         
         scale_factor_x = img.shape[1] / w
         
@@ -651,7 +609,7 @@ class RandomRotate(object):
         
         img = cv2.resize(img, (w,h))
         
-        new_bbox /= [scale_factor_x, scale_factor_y, scale_factor_x, scale_factor_y] 
+        new_bbox[:,:4] /= [scale_factor_x, scale_factor_y, scale_factor_x, scale_factor_y] 
         
         
         
@@ -713,11 +671,18 @@ class Rotate(object):
         cx, cy = w//2, h//2
         
         corners = get_corners(bboxes)
-        img = rotate_bound(img, self.angle)
         
-        corners, nW, nH = rotate_box(corners, self.angle, cx, cy, h, w)
+        corners = np.hstack((corners, bboxes[:,4:]))
+
+        img = rotate_bound(img, angle)
+        
+        corners[:,:8] = rotate_box(corners[:,:8], angle, cx, cy, h, w)
+        
+        
+        
         
         new_bbox = get_enclosing_box(corners)
+        
         
         scale_factor_x = img.shape[1] / w
         
@@ -725,10 +690,7 @@ class Rotate(object):
         
         img = cv2.resize(img, (w,h))
         
-        new_bbox /= [scale_factor_x, scale_factor_y, scale_factor_x, scale_factor_y] 
-        
-        
-        
+        new_bbox[:,:4] /= [scale_factor_x, scale_factor_y, scale_factor_x, scale_factor_y] 
         
         
         bboxes  = new_bbox
@@ -893,7 +855,7 @@ class YoloResize(object):
         
 
         scale = min(self.inp_dim/h, self.inp_dim/w)
-        bboxes *= (scale)
+        bboxes[:,:4] *= (scale)
         new_w = scale*w
         new_h = scale*h
         inp_dim = self.inp_dim   
@@ -903,7 +865,7 @@ class YoloResize(object):
         
         add_matrix = np.array([[del_w, del_h, del_w, del_h]]).astype(int)
         
-        bboxes += add_matrix
+        bboxes[:,:4] += add_matrix
         
         img = img.astype(np.uint8)
         

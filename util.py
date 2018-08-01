@@ -413,10 +413,6 @@ def write_preds(prediction, batch_imlist, save_dir, classes, colors):
     det_names = pd.Series(batch_imlist).apply(lambda x: "{}/det_{}".format(save_dir,x.split("/")[-1]))
     list(map(cv2.imwrite, det_names, orig_ims))
     
-def get_num_pred_boxes(inp_dim, strides, anchor_nums):    
-    detection_map_dims = [(inp_dim//stride) for stride in strides]
-    return [anchor_nums[i]*detection_map_dims[i]**2 for i in range(len(detection_map_dims))]
-#    return ([num_boxes_per_dim*x**2 for x in detection_map_dims])
 
 def torch_meshgrid(x, y):
     x = x.view(-1,1).repeat(1,x.shape[0])

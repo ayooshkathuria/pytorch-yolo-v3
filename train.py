@@ -4,10 +4,12 @@ import argparse
 from darknet import *
 from cocoloader import CocoDataset, transform_annotation
 from util import *
-import pickle
 from data_aug.data_aug import *
 from preprocess import *
-
+import numpy as np
+import cv2
+import pickle as pkl
+import matplotlib.pyplot as plt
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -36,8 +38,8 @@ args = arg_parse()
 
 #Load the model
 model = Darknet(args.cfgfile)
-model.load_weights(args.weightsfile)
-model = model.to(device)  ## Really? You're gonna train on the CPU?
+#model.load_weights(args.weightsfile)
+#model = model.to(device)  ## Really? You're gonna train on the CPU?
 
 # Load the config file
 net_options =  model.net_info
@@ -65,37 +67,8 @@ policy = net_options['policy']
 steps = net_options['steps']
 scales = net_options['scales']
 
-
-
-transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(608)])
-
-coco_loader = pkl.load(open("Coco_sample.pkl", "rb"))
-
-
-strides = [32,16,8]
-anchors = [[10,13],  [16,30],  [33,23],  [30,61],  [62,45],  [59,119],  [116,90],
-           [156,198],  [373,326]]
-inp_dim = 416
-classes = 80
-num_anchors = 9
-anchor_nums = [3,3,3]
-
-i = 0
-
-
-def get_pred_box_cords(num_pred_boxes, label_map, strides, inp_dim, anchors_nums):
-    i = 0
-    for n, pred_boxes in enumerate(num_pred_boxes):
-        unit = strides[n]
-        corners = torch.arange(0, inp_dim, unit)
-        offset = unit // 2
-        grid = torch_meshgrid(corners, corners).view(-1,2)
-        grid += offset
-        grid = grid.repeat(1,anchors_nums[n]).view(anchors_nums[n]*grid.shape[0], -1)
-        label_map[i:i+pred_boxes,[0,1]] = grid
-        i += pred_boxes
-    return label_map        
-
+#    return ([num_boxes_per_dim*x**2 for x in detection_map_dims])
+ 
 #for x in coco_loader:
 #    x = transform_annotation(x)
 #    
@@ -121,6 +94,68 @@ def get_pred_box_cords(num_pred_boxes, label_map, strides, inp_dim, anchors_nums
 #    if i == 10:
 #        break   
 
+transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(608)])
+#transforms = Sequence([RandomHorizontalFlip()])
+
+coco_loader = pkl.load(open("Coco_sample.pkl", "rb"))
+
+
+strides = [32,16,8]
+anchors = [[10,13],  [16,30],  [33,23],  [30,61],  [62,45],  [59,119],  [116,90],
+           [156,198],  [373,326]]
+inp_dim = 608
+classes = 80
+num_anchors = 9
+anchor_nums = [3,3,3]
+
+i = 0
+
+
+def get_pred_box_cords(num_pred_boxes, label_map, strides, inp_dim, anchors_nums):
+    i = 0
+    for n, pred_boxes in enumerate(num_pred_boxes):
+        unit = strides[n]
+        corners = torch.arange(0, inp_dim, unit).to(device)
+        offset = unit // 2
+        grid = torch_meshgrid(corners, corners).view(-1,2)
+        grid += offset
+        grid = grid.repeat(1,anchors_nums[n]).view(anchors_nums[n]*grid.shape[0], -1)
+        label_map[i:i+pred_boxes,[0,1]] = grid
+        i += pred_boxes
+    return label_map        
+
+def get_num_pred_boxes(inp_dim, strides, anchor_nums):    
+    detection_map_dims = [(inp_dim//stride) for stride in strides]
+    return [anchor_nums[i]*detection_map_dims[i]**2 for i in range(len(detection_map_dims))]
+
+def get_ground_truth_map(ground_truth, label_map):
+    i = 0
+    j = 0
+    
+    ind = 0
+    center_cell_li = []
+    
+    
+    for n, anchor in enumerate(anchor_nums):
+        scale_anchors = anchors[i: i + anchor]
+        center_cells = (ground_truth[:,[0,1]]) / strides[n]
+        
+        center_cells = center_cells.long()
+        
+        ind += anchor_nums[n]*(inp_dim//strides[n]*center_cells[:,1] + center_cells[:,0])
+        print(ground_truth[:,[0,1]])
+        print(center_cells)
+        print(ind)
+        assert False
+        center_cell_anchors = label_map
+        
+        i += anchor
+        j += num_pred_boxes[n]
+        
+    
+    label_map = label_map.view(label_map.shape[0], 1, label_map.shape[1])
+
+
 toyloader = DataLoader(toyset("data_aug/demo.jpeg", transform = transforms))
 
 
@@ -128,24 +163,40 @@ plt.rcParams["figure.figsize"] = (10,8)
 for x, ann in toyloader:
     x = x.squeeze().numpy()
     cls  = np.array([0,0,0,1])
+    
+
+
     ann = ann.squeeze().numpy()
-    ann = np.hstack((ann, cls.reshape(-1,1)))
+
     x = cv2.cvtColor(x.astype(np.uint8), cv2.COLOR_BGR2RGB)
     
     num_pred_boxes = get_num_pred_boxes(inp_dim, strides, anchor_nums)
     
-    label_map = torch.FloatTensor(sum(num_pred_boxes), 5 + classes)
+    label_map = torch.zeros(sum(num_pred_boxes), 5 + classes).to(device)
     
+    for cord in ann[:,:4]:
+        x = draw_rect(x, cord)
+    plt.imshow(x)
+
     
     label_map = get_pred_box_cords(num_pred_boxes, label_map, 
                                    strides, inp_dim, anchor_nums)
     
-    ground_truth = torch.FloatTensor(ann)
+
+    ground_truth = torch.FloatTensor(ann).to(device)
+
+    ground_truth[:,0] = (ground_truth[:,0] + ground_truth[:,2])/2
+    ground_truth[:,1] = (ground_truth[:,1] + ground_truth[:,3])/2
+    ground_truth[:,2] = 2*(ground_truth[:,2] - ground_truth[:,0])
+    ground_truth[:,3] = 2*(ground_truth[:,3] - ground_truth[:,1])
     
     ground_truth_map = get_ground_truth_map(ground_truth, label_map)
     
-    for cord in ann[:,:4]:
-        x = draw_rect(x, cord)
+    
+    
+    assert False
+    
+
 
         
     plt.imshow(x)
