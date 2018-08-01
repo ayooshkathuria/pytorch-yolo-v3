@@ -58,13 +58,21 @@ python detect.py --images imgs --det det --reso 320
 ```
 
 ### On Video
-For this, you should run the file, video_demo.py with --video flag specifying the video file. The video file should be in .avi format
-since openCV only accepts OpenCV as the input format. 
+For this, you should run the file video_demo.py with --video flag specifying the video file. The video file should be in .avi format
+since openCV only accepts OpenCV as the input format.I add the supportment on save the video with --output flag, and you can use --noshow flag to not allow opencv show
 
 ```
 python video_demo.py --video video.avi
 ```
-
+add --output flag or --noshow flag as follow:
+```
+python video_demo.py --video video.avi --output output --noshow True
+```
+Furthermore, you can run the file video_demo_file.py with the flag like video_demo.py to process videos and output videos result once in a parallel mode
+```
+python video_demo_file --videos video --output output --noshow True
+```
+notice that the flag --videos need a dir which contains the input videos
 Tweakable settings can be seen with -h flag. 
 
 ### Speeding up Video Inference
