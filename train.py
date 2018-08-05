@@ -103,7 +103,7 @@ coco_loader = pkl.load(open("Coco_sample.pkl", "rb"))
 strides = [32,16,8]
 anchors = [[10,13],  [16,30],  [33,23],  [30,61],  [62,45],  [59,119],  [116,90],
            [156,198],  [373,326]]
-inp_dim = 608
+inp_dim = 416
 classes = 80
 num_anchors = 9
 anchor_nums = [3,3,3]
@@ -129,36 +129,68 @@ def get_num_pred_boxes(inp_dim, strides, anchor_nums):
     return [anchor_nums[i]*detection_map_dims[i]**2 for i in range(len(detection_map_dims))]
 
 def get_ground_truth_map(ground_truth, label_map):
-    i = 0
-    j = 0
+    i = 0    #indexes the anchor boxes
+    j = 0    
     
-    ind = 0
     center_cell_li = []
     
+    total_boxes_per_cell = sum(anchor_nums)
     
+    num_ground_truth_in_batch = ground_truth.shape[0]
+    
+    
+    ground_truth_candidates = torch.FloatTensor(num_ground_truth_in_batch, total_boxes_per_cell, 2).to(device)    
+    
+    inds = torch.LongTensor(ground_truth_candidates.shape[0], ground_truth_candidates.shape[1]) 
+    
+    print(inds.shape)
+    #n index the the detection maps
     for n, anchor in enumerate(anchor_nums):
+        offset =  sum(num_pred_boxes[:n])
+
         scale_anchors = anchors[i: i + anchor]
         center_cells = (ground_truth[:,[0,1]]) / strides[n]
         
-        center_cells = center_cells.long()
+        center_cells = center_cells.long() 
         
-        ind += anchor_nums[n]*(inp_dim//strides[n]*center_cells[:,1] + center_cells[:,0])
-        print(ground_truth[:,[0,1]])
-        print(center_cells)
-        print(ind)
-        assert False
-        center_cell_anchors = label_map
+        a = offset + anchor_nums[n]*(inp_dim//strides[n]*center_cells[:,1] + center_cells[:,0])
+        
+        print(a)
+        inds[:,sum(anchor_nums[:n])] = a
+        
+        for x in range(1, anchor_nums[n]):
+            inds[:,sum(anchor_nums[:n]) + x] = a + x 
+            
+            
+        
+#        print(ground_truth[:,[0,1]])
+#        print(center_cells)
+#        print(inds)
+#        assert False
+        
+#        print(inds.shape)
+        
+        
+        
+
+        
+
+#        center_cell_anchors = label_map[]
         
         i += anchor
         j += num_pred_boxes[n]
         
+#        print(inds)
     
+    print(inds)
+    
+    print(label_map[inds][:,:,[0,1]].shape    )
     label_map = label_map.view(label_map.shape[0], 1, label_map.shape[1])
 
 
 toyloader = DataLoader(toyset("data_aug/demo.jpeg", transform = transforms))
 
-
+random.seed(0)
 plt.rcParams["figure.figsize"] = (10,8)
 for x, ann in toyloader:
     x = x.squeeze().numpy()
@@ -182,7 +214,7 @@ for x, ann in toyloader:
     label_map = get_pred_box_cords(num_pred_boxes, label_map, 
                                    strides, inp_dim, anchor_nums)
     
-
+    
     ground_truth = torch.FloatTensor(ann).to(device)
 
     ground_truth[:,0] = (ground_truth[:,0] + ground_truth[:,2])/2

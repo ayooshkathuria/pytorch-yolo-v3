@@ -417,6 +417,6 @@ def write_preds(prediction, batch_imlist, save_dir, classes, colors):
 def torch_meshgrid(x, y):
     x = x.view(-1,1).repeat(1,x.shape[0])
     y = y.repeat(y.shape[0],1)
-    meshed = torch.cat([x.unsqueeze_(2),y.unsqueeze_(2)], 2)
+    meshed = torch.cat([y.unsqueeze_(2),x.unsqueeze_(2)], 2)
     return meshed
     
