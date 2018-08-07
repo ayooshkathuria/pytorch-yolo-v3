@@ -136,6 +136,7 @@ if __name__ ==  '__main__':
     
     start_det_loop = time.time()
     
+    batch_num = 0
     for ind, batch, dim in imloader:
         #load the image 
         start = time.time()
@@ -189,7 +190,12 @@ if __name__ ==  '__main__':
         prediction = de_letter_box(prediction, im_dim_list, inp_dim)
         
         
+        
+        
         write_preds(prediction, batch_imlist, args.det, classes, colors)
+        
+        prediction[:,0] += batch_num*batch_size
+        batch_num += 1
         
         
         if not write:

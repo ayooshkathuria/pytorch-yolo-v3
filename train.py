@@ -113,6 +113,8 @@ i = 0
 
 def get_pred_box_cords(num_pred_boxes, label_map, strides, inp_dim, anchors_nums):
     i = 0
+    j = 0 
+    
     for n, pred_boxes in enumerate(num_pred_boxes):
         unit = strides[n]
         corners = torch.arange(0, inp_dim, unit).to(device)
@@ -121,12 +123,31 @@ def get_pred_box_cords(num_pred_boxes, label_map, strides, inp_dim, anchors_nums
         grid += offset
         grid = grid.repeat(1,anchors_nums[n]).view(anchors_nums[n]*grid.shape[0], -1)
         label_map[i:i+pred_boxes,[0,1]] = grid
+        
+        scale_anchors =  anchors[j: j + anchor_nums[n]]
+        
+        scale_anchors = torch.FloatTensor(scale_anchors).to(device)
+        
+        scale_anchors = scale_anchors.repeat(int(pred_boxes/anchor_nums[n]),1)
+        
+        label_map[i:i+pred_boxes,[2,3]] = scale_anchors
+     
+        
+        
         i += pred_boxes
+        j += anchor_nums[n]
     return label_map        
+
+
+
+
 
 def get_num_pred_boxes(inp_dim, strides, anchor_nums):    
     detection_map_dims = [(inp_dim//stride) for stride in strides]
     return [anchor_nums[i]*detection_map_dims[i]**2 for i in range(len(detection_map_dims))]
+
+
+
 
 def get_ground_truth_map(ground_truth, label_map):
     i = 0    #indexes the anchor boxes
@@ -139,11 +160,9 @@ def get_ground_truth_map(ground_truth, label_map):
     num_ground_truth_in_batch = ground_truth.shape[0]
     
     
-    ground_truth_candidates = torch.FloatTensor(num_ground_truth_in_batch, total_boxes_per_cell, 2).to(device)    
     
-    inds = torch.LongTensor(ground_truth_candidates.shape[0], ground_truth_candidates.shape[1]) 
+    inds = torch.LongTensor(num_ground_truth_in_batch, total_boxes_per_cell).to(device)
     
-    print(inds.shape)
     #n index the the detection maps
     for n, anchor in enumerate(anchor_nums):
         offset =  sum(num_pred_boxes[:n])
@@ -155,25 +174,17 @@ def get_ground_truth_map(ground_truth, label_map):
         
         a = offset + anchor_nums[n]*(inp_dim//strides[n]*center_cells[:,1] + center_cells[:,0])
         
-        print(a)
         inds[:,sum(anchor_nums[:n])] = a
         
         for x in range(1, anchor_nums[n]):
             inds[:,sum(anchor_nums[:n]) + x] = a + x 
-            
-            
-        
+  
 #        print(ground_truth[:,[0,1]])
 #        print(center_cells)
 #        print(inds)
 #        assert False
-        
+#        
 #        print(inds.shape)
-        
-        
-        
-
-        
 
 #        center_cell_anchors = label_map[]
         
@@ -184,14 +195,23 @@ def get_ground_truth_map(ground_truth, label_map):
     
     print(inds)
     
-    print(label_map[inds][:,:,[0,1]].shape    )
-    label_map = label_map.view(label_map.shape[0], 1, label_map.shape[1])
+    candidate_boxes = label_map[inds.long()][:,:,:4]
+    ground_truth_boxes = ground_truth.unsqueeze(1)[:,:,:4]
+    print(candidate_boxes.shape)
+    print(ground_truth_boxes.shape)
+
+
+
+
 
 
 toyloader = DataLoader(toyset("data_aug/demo.jpeg", transform = transforms))
 
 random.seed(0)
 plt.rcParams["figure.figsize"] = (10,8)
+
+anchors = pkl.load(open("anchors.pkl", "rb"))
+
 for x, ann in toyloader:
     x = x.squeeze().numpy()
     cls  = np.array([0,0,0,1])
@@ -223,6 +243,7 @@ for x, ann in toyloader:
     ground_truth[:,3] = 2*(ground_truth[:,3] - ground_truth[:,1])
     
     ground_truth_map = get_ground_truth_map(ground_truth, label_map)
+    
     
     
     

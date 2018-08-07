@@ -38,7 +38,7 @@ def YOLO_kmeans(points, num_k):
         
         for k in range(num_k):
             arr = points[clusters == k]
-            centroids[k] = np.median(arr, 0)
+            centroids[k] = np.mean(arr, 0)
             
     
         ious = IOU_dist(points, centroids[clusters])
@@ -50,6 +50,8 @@ def YOLO_kmeans(points, num_k):
     
     
     plt.plot((range(len(avg_ious))), avg_ious)
+    
+    plt.savefig("Avg_IOU.jpeg")
     
     plt.show()
     
@@ -100,4 +102,5 @@ colors = np.array(list(map(lambda x: color_dict[x], b[1])))
 
 plt.scatter(a[:,0], a[:,1], c = colors, s  = 0.001)
 plt.scatter(b[0][:,0], b[0][:,1], s = 15, c = "black")
+plt.savefig("kmeans.jpg")
 plt.show()
