@@ -14,7 +14,7 @@ inp_dim = 416
 
 
 transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(inp_dim)])
-transforms = Sequence([])
+#transforms = Sequence([])
 
 random.seed(0)
 
@@ -37,7 +37,7 @@ def transform_annotation(x):
     
     category_ids = np.array([a["category_id"] for a in x[1]]).reshape(-1,1)
     
-    ground_truth = np.concatenate([boxes, category_ids], 1)
+    ground_truth = np.concatenate([boxes, category_ids], 1).reshape(-1,5)
     
     
     
@@ -119,10 +119,16 @@ class CocoDataset(CocoDetection):
         #n index the the detection maps
         for n, anchor in enumerate(self.anchor_nums):
             offset =  sum(self.num_pred_boxes[:n])
-                
-            center_cells = (ground_truth[:,[0,1]]) // self.strides[n]
+            try:
+                center_cells = (ground_truth[:,[0,1]]) // self.strides[n]
+            except:
+                print(ground_truth)
+                assert False
+            
+            
             
             center_cells = center_cells 
+            
             
             a = offset + self.anchor_nums[n]*(inp_dim//self.strides[n]*center_cells[:,1] + center_cells[:,0])
             
@@ -135,14 +141,16 @@ class CocoDataset(CocoDetection):
             i += anchor
             j += self.num_pred_boxes[n]
         
-        
         candidate_boxes = label_map[inds][:,:,:4]
         
         
-        candidate_boxes = center_to_corner(candidate_boxes)
-    
-        ground_truth_boxes = center_to_corner(ground_truth.copy()[np.newaxis]).squeeze()[:,:4]
         
+        
+        
+        candidate_boxes = center_to_corner(candidate_boxes)
+        
+    
+        ground_truth_boxes = center_to_corner(ground_truth.copy()[np.newaxis]).squeeze(0)[:,:4]
         
     
         candidate_boxes = candidate_boxes.transpose(0,2,1)
@@ -176,6 +184,23 @@ class CocoDataset(CocoDetection):
     
         return (prediction_boxes)
     
+    def get_ground_truth_map(self, ground_truth, label_map, ground_truth_predictors):
+    
+        #Set the objectness confidence of these boxes to 1
+        predboxes = label_map[ground_truth_predictors]
+        
+        predboxes[:,4] = 1
+        predboxes[:,:4] = ground_truth[:,:4]
+        
+        cls_inds = (5 + ground_truth[:,4]).astype(int)
+        
+        
+        
+        predboxes[np.arange(ground_truth.shape[0]).astype(int) , cls_inds] = 1    
+        
+        label_map[ground_truth_predictors] = predboxes
+        return label_map
+    
     def __getitem__(self, idx):
 #        return super().__getitem__(idx)
         
@@ -187,25 +212,25 @@ class CocoDataset(CocoDetection):
          #seperate images, boxes and class_ids
          image, ground_truth = example
          
+         
          #apply the augmentations to the image and the bounding boxes
          image, ground_truth = transforms(image, ground_truth)
          
+
+         
          #Convert the cv2 image into a PyTorch tensor
-#         image = torch.Tensor(image)
+         image = torch.Tensor(image)
          
-
-         for i,cord in enumerate(ground_truth[:,:4]):
-             if i in [6,7]:    
-                 print(cord)
-                 image = draw_rect(image, cord)
+#
+#         for i,cord in enumerate(ground_truth[:,:4]):
+#             if i in [6,7]:    
+#                 image = draw_rect(image, cord)
                  
-                 
-         plt.imshow(image)
+    
          #Convert the box notation from x1,y1,x2,y2 ---> cx, cy, w, h
-         ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze()
-
-
+         ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
          
+
          #Generate a table of labels
          label_table = np.zeros((sum(self.num_pred_boxes), 5 + self.num_classes), dtype = np.float)
          
@@ -215,26 +240,29 @@ class CocoDataset(CocoDetection):
          #Get the bounding boxes to be assigned to the ground truth
          ground_truth_predictors = self.get_ground_truth_predictors(ground_truth, label_table)
          
+         ground_truth_predictors = ground_truth_predictors.squeeze(1)
          
-         print(ground_truth_predictors)
+
+         ground_truth_map = self.get_ground_truth_map(ground_truth, label_table, ground_truth_predictors)
          
+         ground_truth_map = torch.Tensor(ground_truth_map)
+         
+         return image, ground_truth_map
          
 
          
          
                  
          
-         assert False
         
         
     
 coco = CocoDataset()
 #
-coco_loader = DataLoader(coco)
+coco_loader = DataLoader(coco, batch_size = 5)
 
 for x in coco_loader:
-    print(x)    
-    assert False    
+    print(x[0].shape, x[1].shape)    
 
 def tiny_coco(cocoloader, num):
     i = 0
