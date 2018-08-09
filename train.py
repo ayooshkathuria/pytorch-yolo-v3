@@ -2,7 +2,7 @@ import torch
 import os
 import argparse
 from darknet import *
-from cocoloader import CocoDataset, transform_annotation
+#from cocoloader import transform_annotation
 from util import *
 from data_aug.data_aug import *
 from preprocess import *
@@ -10,7 +10,8 @@ import numpy as np
 import cv2
 import pickle as pkl
 import matplotlib.pyplot as plt
-
+from bbox import bbox_iou, corner_to_center, center_to_corner
+import pickle
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def arg_parse():
@@ -94,7 +95,6 @@ scales = net_options['scales']
 #    if i == 10:
 #        break   
 
-transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(608)])
 #transforms = Sequence([RandomHorizontalFlip()])
 
 coco_loader = pkl.load(open("Coco_sample.pkl", "rb"))
@@ -103,12 +103,18 @@ coco_loader = pkl.load(open("Coco_sample.pkl", "rb"))
 strides = [32,16,8]
 anchors = [[10,13],  [16,30],  [33,23],  [30,61],  [62,45],  [59,119],  [116,90],
            [156,198],  [373,326]]
+
+anchors.reverse()
+anchors = np.array(anchors)
 inp_dim = 416
 classes = 80
 num_anchors = 9
 anchor_nums = [3,3,3]
 
 i = 0
+
+transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(inp_dim)])
+
 
 
 def get_pred_box_cords(num_pred_boxes, label_map, strides, inp_dim, anchors_nums):
@@ -149,29 +155,31 @@ def get_num_pred_boxes(inp_dim, strides, anchor_nums):
 
 
 
-def get_ground_truth_map(ground_truth, label_map):
+def get_ground_truth_predictors(ground_truth, label_map):
     i = 0    #indexes the anchor boxes
     j = 0    
     
     center_cell_li = []
     
-    total_boxes_per_cell = sum(anchor_nums)
+    total_boxes_per_gt = sum(anchor_nums)
     
-    num_ground_truth_in_batch = ground_truth.shape[0]
+    num_ground_truth_in_im = ground_truth.shape[0]
     
     
     
-    inds = torch.LongTensor(num_ground_truth_in_batch, total_boxes_per_cell).to(device)
+    inds = torch.LongTensor(num_ground_truth_in_im, total_boxes_per_gt).to(device)
     
     #n index the the detection maps
     for n, anchor in enumerate(anchor_nums):
         offset =  sum(num_pred_boxes[:n])
 
         scale_anchors = anchors[i: i + anchor]
+        
         center_cells = (ground_truth[:,[0,1]]) / strides[n]
         
         center_cells = center_cells.long() 
         
+        print(center_cells)
         a = offset + anchor_nums[n]*(inp_dim//strides[n]*center_cells[:,1] + center_cells[:,0])
         
         inds[:,sum(anchor_nums[:n])] = a
@@ -179,26 +187,70 @@ def get_ground_truth_map(ground_truth, label_map):
         for x in range(1, anchor_nums[n]):
             inds[:,sum(anchor_nums[:n]) + x] = a + x 
   
-#        print(ground_truth[:,[0,1]])
-#        print(center_cells)
-#        print(inds)
-#        assert False
-#        
-#        print(inds.shape)
 
-#        center_cell_anchors = label_map[]
-        
         i += anchor
         j += num_pred_boxes[n]
-        
-#        print(inds)
     
-    print(inds)
     
     candidate_boxes = label_map[inds.long()][:,:,:4]
-    ground_truth_boxes = ground_truth.unsqueeze(1)[:,:,:4]
-    print(candidate_boxes.shape)
-    print(ground_truth_boxes.shape)
+    
+    
+    candidate_boxes = center_to_corner(candidate_boxes)
+
+    ground_truth_boxes = center_to_corner(ground_truth.unsqueeze(0)).squeeze()[:,:4]
+
+    candidate_boxes = candidate_boxes.transpose(1,2).contiguous()
+    
+    ground_truth_boxes = ground_truth_boxes.unsqueeze(2)
+    
+    candidate_ious = bbox_iou(candidate_boxes, ground_truth_boxes)
+
+    pickle.dump(candidate_ious, open("candidate_ious.pkl", "wb"))
+    
+    prediction_boxes = candidate_ious.new(num_ground_truth_in_im,1)
+    
+    print(candidate_ious)
+    print(inds)
+    for i in range(num_ground_truth_in_im):
+        #get the the row and the column of the highest IoU
+        max_iou_ind = torch.argmax(candidate_ious)
+        max_iou_row = max_iou_ind.int() / total_boxes_per_gt
+        max_iou_col = max_iou_ind.int() % total_boxes_per_gt
+        
+        
+        #get the index (in label map) of the box with maximum IoU
+        max_iou_box = inds[max_iou_row, max_iou_col]
+        
+        #assign the bounding box to the appropriate gt
+        prediction_boxes[max_iou_row] = max_iou_box
+        
+        #zero out all the IoUs for this box so it can't be reassigned to any other gt
+        box_mask = (inds != max_iou_ind).float().view(-1,9)
+        candidate_ious *= box_mask
+        
+        #zero out all the values of the row representing gt that just got assigned so that it 
+        #doesn't participate in the process again
+        candidate_ious[max_iou_row] *= 0
+
+    return (prediction_boxes)
+            
+def get_ground_truth_map(ground_truth, label_map, ground_truth_predictors):
+    
+    #Set the objectness confidence of these boxes to 1
+    predboxes = label_map[ground_truth_predictors]
+    
+    
+    predboxes[:,4] = 1
+    predboxes[:,:4] = ground_truth[:,:4]
+    
+    cls_inds = 5 + ground_truth[:,4].long()
+
+    
+    predboxes[torch.arange(ground_truth.shape[0]).long() , cls_inds] = 1    
+    
+    label_map[ground_truth_predictors] = predboxes
+    return label_map
+    
 
 
 
@@ -207,10 +259,10 @@ def get_ground_truth_map(ground_truth, label_map):
 
 toyloader = DataLoader(toyset("data_aug/demo.jpeg", transform = transforms))
 
-random.seed(0)
+random.seed(2)
 plt.rcParams["figure.figsize"] = (10,8)
 
-anchors = pkl.load(open("anchors.pkl", "rb"))
+#anchors = pkl.load(open("anchors.pkl", "rb"))
 
 for x, ann in toyloader:
     x = x.squeeze().numpy()
@@ -220,6 +272,7 @@ for x, ann in toyloader:
 
     ann = ann.squeeze().numpy()
 
+    print(ann.shape)
     x = cv2.cvtColor(x.astype(np.uint8), cv2.COLOR_BGR2RGB)
     
     num_pred_boxes = get_num_pred_boxes(inp_dim, strides, anchor_nums)
@@ -236,18 +289,15 @@ for x, ann in toyloader:
     
     
     ground_truth = torch.FloatTensor(ann).to(device)
+    
+    
+    ground_truth = corner_to_center(ground_truth.unsqueeze(0)).squeeze()
+    
 
-    ground_truth[:,0] = (ground_truth[:,0] + ground_truth[:,2])/2
-    ground_truth[:,1] = (ground_truth[:,1] + ground_truth[:,3])/2
-    ground_truth[:,2] = 2*(ground_truth[:,2] - ground_truth[:,0])
-    ground_truth[:,3] = 2*(ground_truth[:,3] - ground_truth[:,1])
+    ground_truth_predictors = get_ground_truth_predictors(ground_truth, label_map)
     
-    ground_truth_map = get_ground_truth_map(ground_truth, label_map)
-    
-    
-    
-    
-    assert False
+    ground_truth_predictors = ground_truth_predictors.long().squeeze()
+    ground_truth_map = get_ground_truth_map(ground_truth, label_map, ground_truth_predictors)
     
 
 

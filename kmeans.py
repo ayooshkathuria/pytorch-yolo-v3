@@ -40,8 +40,8 @@ def YOLO_kmeans(points, num_k):
             arr = points[clusters == k]
             centroids[k] = np.mean(arr, 0)
             
-    
         ious = IOU_dist(points, centroids[clusters])
+        
         
         avg_iou = np.mean(ious)
         
@@ -78,7 +78,8 @@ def get_clusters(points, centroids):
     centroids = centroids.reshape(centroids.shape[0], 1, centroids.shape[1])
     centroids = centroids.transpose((1,2,0))
     
-    
+    print(centroids.shape)
+    print(points.shape)
     iou = IOU_dist(points, centroids)
     
     dist = 1 - iou

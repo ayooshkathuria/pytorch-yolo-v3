@@ -5,6 +5,8 @@ import random
 
 import numpy as np
 import cv2
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 def confidence_filter(result, confidence):
     conf_mask = (result[:,:,4] > confidence).float().unsqueeze(2)
@@ -38,6 +40,23 @@ def get_abs_coord(box):
     return x1, y1, x2, y2
     
 
+def center_to_corner(prediction):
+    prediction[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
+    prediction[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
+    prediction[:,:,2] = (prediction[:,:,2] + prediction[:,:,0]) 
+    prediction[:,:,3] = (prediction[:,:,3] + prediction[:,:,1])
+    
+    return prediction
+
+def corner_to_center(prediction):
+    prediction[:,:,0] = (prediction[:,:,0] + prediction[:,:,2])/2
+    
+    prediction[:,:,1] = (prediction[:,:,1] + prediction[:,:,3])/2
+    prediction[:,:,2] = 2*(prediction[:,:,2] - prediction[:,:,0])
+    prediction[:,:,3] = 2*(prediction[:,:,3] - prediction[:,:,1])
+
+    return prediction
+
 
 def sanity_fix(box):
     if (box[0] > box[2]):
@@ -48,27 +67,40 @@ def sanity_fix(box):
         
     return box
 
-def bbox_iou(box1, box2):
+def bbox_iou(box1, box2, lib = "torch"):
     """
     Returns the IoU of two bounding boxes 
     
     
     """
+    if lib == "torch":
+        max_measure = torch.max
+        min_measure = torch.min
+    else:
+        max_measure = np.maximum
+        min_measure = np.minimum
+        
+    
     #Get the coordinates of bounding boxes
     b1_x1, b1_y1, b1_x2, b1_y2 = box1[:,0], box1[:,1], box1[:,2], box1[:,3]
     b2_x1, b2_y1, b2_x2, b2_y2 = box2[:,0], box2[:,1], box2[:,2], box2[:,3]
     
     #get the corrdinates of the intersection rectangle
-    inter_rect_x1 =  torch.max(b1_x1, b2_x1)
-    inter_rect_y1 =  torch.max(b1_y1, b2_y1)
-    inter_rect_x2 =  torch.min(b1_x2, b2_x2)
-    inter_rect_y2 =  torch.min(b1_y2, b2_y2)
+    inter_rect_x1 =  max_measure(b1_x1, b2_x1)
+    inter_rect_y1 =  max_measure(b1_y1, b2_y1)
+    inter_rect_x2 =  min_measure(b1_x2, b2_x2)
+    inter_rect_y2 =  min_measure(b1_y2, b2_y2)
     
     #Intersection area
-    if torch.cuda.is_available():
-            inter_area = torch.max(inter_rect_x2 - inter_rect_x1 + 1,torch.zeros(inter_rect_x2.shape).cuda())*torch.max(inter_rect_y2 - inter_rect_y1 + 1, torch.zeros(inter_rect_x2.shape).cuda())
+    if lib == "torch":
+        inter_area_w = max_measure(inter_rect_x2 - inter_rect_x1 + 1,torch.zeros(inter_rect_x2.shape).to(device))
+        inter_area_h = max_measure(inter_rect_y2 - inter_rect_y1 + 1, torch.zeros(inter_rect_x2.shape).to(device))
     else:
-            inter_area = torch.max(inter_rect_x2 - inter_rect_x1 + 1,torch.zeros(inter_rect_x2.shape))*torch.max(inter_rect_y2 - inter_rect_y1 + 1, torch.zeros(inter_rect_x2.shape))
+        inter_area_w = max_measure(inter_rect_x2 - inter_rect_x1 + 1,np.zeros(inter_rect_x2.shape))
+        inter_area_h = max_measure(inter_rect_y2 - inter_rect_y1 + 1, np.zeros(inter_rect_x2.shape)) 
+        
+    inter_area = inter_area_w*inter_area_h
+    
     
     #Union Area
     b1_area = (b1_x2 - b1_x1 + 1)*(b1_y2 - b1_y1 + 1)
@@ -77,6 +109,10 @@ def bbox_iou(box1, box2):
     iou = inter_area / (b1_area + b2_area - inter_area)
     
     return iou
+
+
+    return iou
+
 
 
 def pred_corner_coord(prediction):

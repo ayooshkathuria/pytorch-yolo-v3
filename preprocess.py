@@ -153,9 +153,8 @@ class toyset(Dataset):
         annots_transform[:,:4] *= im_dim
 
         
-        a = "fg"
         if self.transform:
-            image, annots_transform = self.transform(image, annots_transform, a)
+            image, annots_transform = self.transform(image, annots_transform)
         
         image = image.copy()
         

@@ -44,7 +44,7 @@ class Sequence(object):
         self.probs = probs
         
     
-    def __call__(self, images, bboxes,a):
+    def __call__(self, images, bboxes):
         for i, augmentation in enumerate(self.augmentations):
             if type(self.probs) == list:
                 prob = self.probs[i]
