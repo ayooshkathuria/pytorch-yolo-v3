@@ -13,7 +13,7 @@ from bbox import corner_to_center, center_to_corner, bbox_iou
 inp_dim = 416
 
 
-transforms = Sequence([RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10), RandomShear(), YoloResize(inp_dim)])
+transforms = Sequence([ RandomHSV(), RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10),  RandomShear(), YoloResize(inp_dim)])
 #transforms = Sequence([])
 
 random.seed(0)
@@ -37,6 +37,7 @@ def transform_annotation(x):
     
     category_ids = np.array([a["category_id"] for a in x[1]]).reshape(-1,1)
     
+    
     ground_truth = np.concatenate([boxes, category_ids], 1).reshape(-1,5)
     
     
@@ -54,7 +55,7 @@ class CocoDataset(CocoDetection):
         self.inp_dim = 416
         self.strides = [32,16,8]
         self.anchor_nums = [3,3,3]
-        self.num_classes = 80
+        self.num_classes = 90
         
         self.anchors = [[10,13],  [16,30],  [33,23],  [30,61],  [62,45],  [59,119],  [116,90],
            [156,198],  [373,326]]
@@ -192,6 +193,7 @@ class CocoDataset(CocoDetection):
         predboxes[:,4] = 1
         predboxes[:,:4] = ground_truth[:,:4]
         
+        
         cls_inds = (5 + ground_truth[:,4]).astype(int)
         
         
@@ -206,16 +208,18 @@ class CocoDataset(CocoDetection):
         
          example = self.root[idx]
          
+
          #Transform the annotation to a manageable format
          example = transform_annotation(example)
+         
+
          
          #seperate images, boxes and class_ids
          image, ground_truth = example
          
-         
+
          #apply the augmentations to the image and the bounding boxes
          image, ground_truth = transforms(image, ground_truth)
-         
 
          
          #Convert the cv2 image into a PyTorch tensor
@@ -226,10 +230,12 @@ class CocoDataset(CocoDetection):
 #             if i in [6,7]:    
 #                 image = draw_rect(image, cord)
                  
-    
          #Convert the box notation from x1,y1,x2,y2 ---> cx, cy, w, h
-         ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
          
+         
+
+         ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
+
 
          #Generate a table of labels
          label_table = np.zeros((sum(self.num_pred_boxes), 5 + self.num_classes), dtype = np.float)
@@ -243,6 +249,7 @@ class CocoDataset(CocoDetection):
          ground_truth_predictors = ground_truth_predictors.squeeze(1)
          
 
+         
          ground_truth_map = self.get_ground_truth_map(ground_truth, label_table, ground_truth_predictors)
          
          ground_truth_map = torch.Tensor(ground_truth_map)
@@ -262,7 +269,8 @@ coco = CocoDataset()
 coco_loader = DataLoader(coco, batch_size = 5)
 
 for x in coco_loader:
-    print(x[0].shape, x[1].shape)    
+#    print(x[0].shape, x[1].shape)    
+    pass
 
 def tiny_coco(cocoloader, num):
     i = 0

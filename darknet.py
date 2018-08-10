@@ -438,6 +438,7 @@ class Darknet(nn.Module):
         # Let's load them up
         weights = np.fromfile(fp, dtype = np.float32)
         
+        print(self.module_list)        
         ptr = 0
         for i in range(len(self.module_list)):
             module_type = self.blocks[i + 1]["type"]
@@ -470,7 +471,8 @@ class Darknet(nn.Module):
                     bn_running_var = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
                     ptr  += num_bn_biases
                     
-                    #Cast the loaded weights into dims of model weights. 
+                    #Cast the loaded weights into dims of model weights.
+                    print(i)
                     bn_biases = bn_biases.view_as(bn.bias.data)
                     bn_weights = bn_weights.view_as(bn.weight.data)
                     bn_running_mean = bn_running_mean.view_as(bn.running_mean)
