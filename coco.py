@@ -1,3 +1,4 @@
+
 import torch.utils.data as data
 from PIL import Image
 import os
@@ -149,13 +150,17 @@ class CocoDetection(data.Dataset):
         ann_ids = coco.getAnnIds(imgIds=img_id)
         target = coco.loadAnns(ann_ids)
         
-        print("Image {} out pf {}".format(self.i + 1, self.total))
-        self.dic[img_id] = transform_annotation(target)
         
-        self.i += 1
 
         
         path = coco.loadImgs(img_id)[0]['file_name']
+        
+
+        
+        print("Image {} out of {}".format(self.i + 1, self.total))
+        self.dic[path] = transform_annotation(target)
+        
+        self.i += 1
         
         img = Image.open(os.path.join(self.root, path)).convert('RGB')
         if self.transform is not None:
@@ -184,3 +189,11 @@ class CocoDetection(data.Dataset):
         tmp = '    Target Transforms (if any): '
         fmt_str += '{0}{1}'.format(tmp, self.target_transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
+    
+    
+coco = CocoDetection(root = "COCO/train2017", annFile = "COCO/instances_train2017.json")
+
+for x in coco:
+    pass
+
+coco.pickle_dict()

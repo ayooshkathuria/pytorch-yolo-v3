@@ -12,7 +12,9 @@ import pickle as pkl
 import matplotlib.pyplot as plt
 from bbox import bbox_iou, corner_to_center, center_to_corner
 import pickle
-
+from cocoloader import *
+import torch.optim as optim
+random.seed(0)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def arg_parse():
     """
@@ -40,9 +42,8 @@ args = arg_parse()
 args.weightsfile = "darknet53.conv.74"
 #Load the model
 model = Darknet(args.cfgfile).to(device)
-model.load_weights(args.weightsfile)
+model.load_weights(args.weightsfile, stop = 74)
 
-assert False
 #assert False
 #model = model.to(device)  ## Really? You're gonna train on the CPU?
 
@@ -73,6 +74,42 @@ steps = net_options['steps']
 scales = net_options['scales']
 
 
+inp_dim = 416
+transforms = Sequence([YoloResize(inp_dim)])
+
+coco = CocoDataset(root = "COCO/train2017", annFile="COCO_ann_mod.pkl", det_transforms = transforms)
+
+coco_loader = DataLoader(coco, batch_size = 3)
+optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+def YOLO_loss(ground_truth, output):
+    #get the objectness loss
+    objectness_target = ground_truth[:,:,4]
+    objectness_pred = output[:,:,4]
+    
+    object_loss = nn.CrossEntropyLoss(weight=torch.Tensor([5,1]))
+    
+    objectness_pred = objectness_pred.unsqueeze(2).repeat(1,1,2)
+    objectness_pred[:,:,1] = 1 - objectness_pred[:,:,0]
+    
+    
+    objectness_loss = -1*(log())
+    print(objectness_loss )
+    assert False
+    
+    return 0
+
+for batch in coco_loader:
+    output = model(batch[0])
+    ground_truth= batch[1]
+    
+    loss  = YOLO_loss(ground_truth, output)
+    
+    loss.backward()
+    assert False
+    
+    
+    
 
 
 
