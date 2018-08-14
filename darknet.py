@@ -349,11 +349,11 @@ class Darknet(nn.Module):
         
         
         write = 0
-        for i in range(len(modules)):        
+        for i in range(len(modules)):       
+            print(i)
             
             module_type = (modules[i]["type"])
             if module_type == "convolutional" or module_type == "upsample" or module_type == "maxpool":
-                
                 x = self.module_list[i](x)
                 outputs[i] = x
 
@@ -420,7 +420,7 @@ class Darknet(nn.Module):
             return 0
 
             
-    def load_weights(self, weightfile):
+    def load_weights(self, weightfile, stop = None):
         
         #Open the weights file
         fp = open(weightfile, "rb")
@@ -438,10 +438,13 @@ class Darknet(nn.Module):
         # Let's load them up
         weights = np.fromfile(fp, dtype = np.float32)
         
-        print(self.module_list)        
+        
         ptr = 0
         for i in range(len(self.module_list)):
             module_type = self.blocks[i + 1]["type"]
+            
+            if i == stop + 1:
+                return
             
             if module_type == "convolutional":
                 model = self.module_list[i]
@@ -472,7 +475,6 @@ class Darknet(nn.Module):
                     ptr  += num_bn_biases
                     
                     #Cast the loaded weights into dims of model weights.
-                    print(i)
                     bn_biases = bn_biases.view_as(bn.bias.data)
                     bn_weights = bn_weights.view_as(bn.weight.data)
                     bn_running_mean = bn_running_mean.view_as(bn.running_mean)
