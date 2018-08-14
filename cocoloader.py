@@ -10,11 +10,15 @@ import time
 import random
 from torch.utils.data import DataLoader
 from bbox import corner_to_center, center_to_corner, bbox_iou
+import cv2 
+import os
+
+
 inp_dim = 416
 
 
 transforms = Sequence([ RandomHSV(), RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10),  RandomShear(), YoloResize(inp_dim)])
-#transforms = Sequence([])
+transforms = Sequence([YoloResize(inp_dim)])
 
 random.seed(0)
 
@@ -48,14 +52,20 @@ def transform_annotation(x):
 class CocoDataset(CocoDetection):
     def __init__(self, root = None, annFile = None, det_transforms = None):
 #        super().__init__(root, annFile, None, None)
-        self.root = pkl.load(open("Coco_sample.pkl", "rb"))
+        self.root = root
+#        self.ids = list(self.coco.imgs.keys())
+        #self.root = root 
+        #self.annFile = pkl.load(open(".pkl", "rb"))
+        #self.ids = list(self.annFile.keys())
 
-        self.annFile = None
-        self.det_tranforms = det_transforms
+        self.annFile = pkl.load(open(annFile, "rb"))
+        
+        self.examples = list(self.annFile.items())
+        self.det_transforms = det_transforms
         self.inp_dim = 416
         self.strides = [32,16,8]
         self.anchor_nums = [3,3,3]
-        self.num_classes = 90
+        self.num_classes = 80
         
         self.anchors = [[10,13],  [16,30],  [33,23],  [30,61],  [62,45],  [59,119],  [116,90],
            [156,198],  [373,326]]
@@ -64,11 +74,22 @@ class CocoDataset(CocoDetection):
         
         #Get the number of bounding boxes predicted PER each scale 
         self.num_pred_boxes = self.get_num_pred_boxes()
+        
+        self.box_strides = self.get_box_strides()
 
     
     def __len__(self):
 #        return super().__len__()
-        return len(self.root)
+        #return len(self.ids)
+        return len(self.examples)
+    
+    def get_box_strides(self):
+        box_strides = np.zeros((sum(self.num_pred_boxes),1))
+        offset = 0
+        for i,x in enumerate(self.num_pred_boxes):
+            box_strides[offset : offset + x ] = self.strides[i]
+            offset += x
+        return box_strides
     
     def set_inp_dim(self, inp_dim):
         self.inp_dim = inp_dim
@@ -191,48 +212,54 @@ class CocoDataset(CocoDetection):
         predboxes = label_map[ground_truth_predictors]
         
         predboxes[:,4] = 1
-        predboxes[:,:4] = ground_truth[:,:4]
+        
+        
+        ground_truth_strides = self.box_strides[ground_truth_predictors]
+        ground_truth[:,:4] /= ground_truth_strides
+        
+        predboxes[:,[0,1]] = (ground_truth[:,[0,1]] - predboxes[:,[0,1]])
+        
+        
+        
+        predboxes[:,[0,1]] = np.log(1/predboxes[:,[0,1]] - 1)
+
+#        predboxes[:,:4] = 
+        
+        
+       
         
         
         cls_inds = (5 + ground_truth[:,4]).astype(int)
-        
-        
-        
         predboxes[np.arange(ground_truth.shape[0]).astype(int) , cls_inds] = 1    
         
         label_map[ground_truth_predictors] = predboxes
         return label_map
     
+
+    
+    
     def __getitem__(self, idx):
-#        return super().__getitem__(idx)
-        
-         example = self.root[idx]
+         example = self.examples[idx]
          
-
-         #Transform the annotation to a manageable format
-         example = transform_annotation(example)
+         path = os.path.join(self.root, example[0])
+         image = cv2.imread(path)[:,:,::-1]   #Load the image from opencv and convert to RGB
          
-
+         
          
          #seperate images, boxes and class_ids
-         image, ground_truth = example
+         ground_truth = example[1]
          
 
          #apply the augmentations to the image and the bounding boxes
-         image, ground_truth = transforms(image, ground_truth)
+         if self.det_transforms:
+             image, ground_truth = self.det_transforms(image, ground_truth)
 
-         
-         #Convert the cv2 image into a PyTorch tensor
+#         im_draw = draw_rect(image, ground_truth[:,:4])
+#         plt.imshow(im_draw)
+#         plt.show()
+         #Convert the cv2 image into a PyTorch 
+         image = image.transpose(2,0,1)/255.0
          image = torch.Tensor(image)
-         
-#
-#         for i,cord in enumerate(ground_truth[:,:4]):
-#             if i in [6,7]:    
-#                 image = draw_rect(image, cord)
-                 
-         #Convert the box notation from x1,y1,x2,y2 ---> cx, cy, w, h
-         
-         
 
          ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
 
@@ -248,11 +275,21 @@ class CocoDataset(CocoDetection):
          
          ground_truth_predictors = ground_truth_predictors.squeeze(1)
          
+         
+
+         
+         label_table[:,:4] //= self.box_strides 
+         
+         
 
          
          ground_truth_map = self.get_ground_truth_map(ground_truth, label_table, ground_truth_predictors)
          
+         
+         
          ground_truth_map = torch.Tensor(ground_truth_map)
+         
+        
          
          return image, ground_truth_map
          
@@ -262,15 +299,16 @@ class CocoDataset(CocoDetection):
                  
          
         
-        
-    
-coco = CocoDataset()
+##        
+###    
+#coco = CocoDataset(root = "COCO/train2017", annFile="COCO_ann.pkl", det_transforms = transforms)
+###
+#coco_loader = DataLoader(coco, batch_size = 5)
 #
-coco_loader = DataLoader(coco, batch_size = 5)
-
-for x in coco_loader:
+#for x in coco_loader:
 #    print(x[0].shape, x[1].shape)    
-    pass
+#    assert False
+#    pass
 
 def tiny_coco(cocoloader, num):
     i = 0
