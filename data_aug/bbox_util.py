@@ -23,6 +23,8 @@ def draw_rect(im, cords):
         
     """
     
+    im = im.copy()
+    
     cords = cords.reshape(-1,4)
     for cord in cords:
         
