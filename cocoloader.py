@@ -216,9 +216,12 @@ class CocoDataset(CocoDetection):
     def get_ground_truth_map(self, ground_truth, label_map, ground_truth_predictors):
     
         #Set the objectness confidence of these boxes to 1
+        
         predboxes = label_map[ground_truth_predictors]
         
         predboxes[:,4] = 1
+        
+        assert ground_truth_predictors.shape[0] == predboxes.shape[0], print(self.debug_id)
         
 
         
@@ -281,13 +284,13 @@ class CocoDataset(CocoDetection):
          ground_truth = example[1]
 
          
-         self.debug_id = idx
+         self.debug_id = example[0]
          #apply the augmentations to the image and the bounding boxes
          if self.det_transforms:
              image, ground_truth = self.det_transforms(image, ground_truth)
              
         
-
+        
 #         
          #Convert the cv2 image into a PyTorch 
          image = image.transpose(2,0,1)/255.0

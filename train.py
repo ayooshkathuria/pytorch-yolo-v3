@@ -136,7 +136,7 @@ def YOLO_loss(ground_truth, output):
     
     total_loss += objectness_loss
     
-    print("Obj Loss", torch.isnan(objectness_loss).any())
+    print("Obj Loss", objectness_loss)
 
     
     
@@ -157,8 +157,8 @@ def YOLO_loss(ground_truth, output):
     centre_y_loss = sum(gt_ob[:,1] - pred_ob[:,1])**2 
     
     print("Num_gt:", gt_ob.shape[0])
-    print("Center_x_loss", torch.isnan(centre_x_loss).any())
-    print("Center_y_loss", torch.isnan(centre_y_loss).any())
+    print("Center_x_loss", (centre_x_loss))
+    print("Center_y_loss", (centre_y_loss))
 
     
     
@@ -177,10 +177,9 @@ def YOLO_loss(ground_truth, output):
     total_loss += w_loss / gt_ob.shape[0]
     total_loss += h_loss / gt_ob.shape[0]
     
-    print("w_loss", torch.isnan(h_loss).any())
-    print("h_loss", torch.isnan(w_loss).any())
+    print("w_loss:", w_loss)
+    print("h_loss:", h_loss)
 
-    print("\n\n")
 
     #class_loss 
     cls_scores = pred_ob[torch.arange(int(pred_ob.shape[0])).long()  , 5 + gt_ob[:,4].long()]
@@ -209,6 +208,7 @@ for batch in coco_loader:
     output = model(batch[0])
     ground_truth= batch[1]
     
+    print("\n\n")
     print("Ground_truth", torch.isnan(ground_truth).any())
  
     loss  = YOLO_loss(ground_truth, output)
