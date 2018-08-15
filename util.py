@@ -25,7 +25,7 @@ def convert2cpu(matrix):
     else:
         return matrix
 
-def predict_transform(prediction, inp_dim, anchors, num_classes):
+def predict_transform(prediction, inp_dim, anchors, num_classes, train = False):
     batch_size = prediction.size(0)
     stride =  inp_dim // prediction.size(2)
     grid_size = inp_dim // stride
@@ -40,6 +40,8 @@ def predict_transform(prediction, inp_dim, anchors, num_classes):
     prediction = prediction.transpose(1,2).contiguous()
     prediction = prediction.view(batch_size, grid_size*grid_size*num_anchors, bbox_attrs)
 
+    if train:
+        return prediction
 
     #Sigmoid the  centre_X, centre_Y. and object confidencce
     prediction[:,:,0] = torch.sigmoid(prediction[:,:,0])

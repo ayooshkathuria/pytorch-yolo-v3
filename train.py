@@ -15,6 +15,15 @@ import pickle
 from cocoloader import *
 import torch.optim as optim
 random.seed(0)
+import torch.autograd.gradcheck
+from tensorboardX import SummaryWriter
+
+
+writer = SummaryWriter()
+
+random.seed(0)
+
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def arg_parse():
     """
@@ -42,10 +51,10 @@ args = arg_parse()
 args.weightsfile = "darknet53.conv.74"
 #Load the model
 model = Darknet(args.cfgfile).to(device)
-model.load_weights(args.weightsfile, stop = 74)
-
+#model.load_weights(args.weightsfile, stop = 74)
+model.train()
 #assert False
-#model = model.to(device)  ## Really? You're gonna train on the CPU?
+model = model.to(device)  ## Really? You're gonna train on the CPU?
 
 # Load the config file
 net_options =  model.net_info
@@ -79,34 +88,111 @@ transforms = Sequence([YoloResize(inp_dim)])
 
 coco = CocoDataset(root = "COCO/train2017", annFile="COCO_ann_mod.pkl", det_transforms = transforms)
 
-coco_loader = DataLoader(coco, batch_size = 3)
-optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+coco_loader = DataLoader(coco, batch_size = 1)
+optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.1)
 
+
+def logloss(pred, target):
+    assert pred.shape == target.shape, "Input and target must be the same shape"
+    pred = pred.view(-1)
+    target = target.view(-1)
+    
+    #check whether reshape has worked properly
+    sigmoid = torch.nn.Sigmoid()(pred)    
+    
+    loss = -1 * (5*target*torch.log(sigmoid) + (1 - target)*torch.log(1 - sigmoid))
+    
+    loss = torch.sum(loss)
+    
+    return loss
+    
 def YOLO_loss(ground_truth, output):
+    
+    total_loss = 0
+    
     #get the objectness loss
     objectness_target = ground_truth[:,:,4]
     objectness_pred = output[:,:,4]
     
-    object_loss = nn.CrossEntropyLoss(weight=torch.Tensor([5,1]))
+    objectness_loss = logloss(objectness_pred, objectness_target)
     
-    objectness_pred = objectness_pred.unsqueeze(2).repeat(1,1,2)
-    objectness_pred[:,:,1] = 1 - objectness_pred[:,:,0]
+    total_loss += objectness_loss
     
     
-    objectness_loss = -1*(log())
-    print(objectness_loss )
-    assert False
+    #Only objectness loss is counted for all boxes
+    object_box_inds = torch.nonzero(ground_truth[:,:,4]).view(-1, 2)
     
-    return 0
 
+    
+    try:
+        gt_ob = ground_truth[object_box_inds[:,0], object_box_inds[:,1]]
+    except IndexError:
+        return None
+    pred_ob = output[object_box_inds[:,0], object_box_inds[:,1]]
+    
+    #get centre x and centre y 
+    centre_x_loss = sum(gt_ob[:,0] - pred_ob[:,0])**2 
+    centre_y_loss = sum(gt_ob[:,1] - pred_ob[:,1])**2 
+    
+    total_loss += centre_x_loss
+    total_loss += centre_y_loss
+    
+
+
+
+    
+    #get w,h loss
+    w_loss = sum((gt_ob[:,2]) - (pred_ob[:,2]))**2 
+    h_loss = sum((gt_ob[:,3]) -  (pred_ob[:,3]))**2 
+    
+    total_loss += w_loss 
+    total_loss += h_loss
+    
+
+
+    #class_loss 
+    cls_scores = pred_ob[torch.arange(int(pred_ob.shape[0])).long()  , 5 + gt_ob[:,4].long()]
+    cls_loss = sum(-1*torch.log(torch.nn.Sigmoid()(cls_scores))) 
+    
+    total_loss += cls_loss
+    
+    total_loss /= gt_ob.shape[0]
+    
+    return total_loss
+    
+
+    
+    
+    #get the centerx, and centre y
+    
+    
+
+    
+    
+itern = 0
+    
 for batch in coco_loader:
     output = model(batch[0])
     ground_truth= batch[1]
     
+ 
     loss  = YOLO_loss(ground_truth, output)
     
-    loss.backward()
-    assert False
+    
+    if loss:
+        print("Loss for iter no: {}: {}".format(itern, float(loss)))
+        writer.add_scalar("Loss/vanilla", float(loss), itern)
+        loss.backward()
+        optimizer.step()
+    
+    itern += 1
+    
+writer.close()
+    
+    
+
+#    res = torch.autograd.gradcheck(YOLO_loss, (ground_truth, output), raise_exception=True)
+
     
     
     

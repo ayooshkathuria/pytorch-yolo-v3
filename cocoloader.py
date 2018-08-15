@@ -76,6 +76,7 @@ class CocoDataset(CocoDetection):
         self.num_pred_boxes = self.get_num_pred_boxes()
         
         self.box_strides = self.get_box_strides()
+        self.debug_id = None
 
     
     def __len__(self):
@@ -107,20 +108,23 @@ class CocoDataset(CocoDetection):
             corners = np.arange(0, inp_dim, unit)
             offset = unit // 2
             grid = np.meshgrid(corners, corners)
+            
             grid = np.concatenate((grid[0][:,:,np.newaxis], grid[1][:,:,np.newaxis]), 2).reshape(-1,2)
+
             grid += offset
-            grid = grid.repeat(self.anchor_nums[n], axis = 1).reshape(self.anchor_nums[n]*grid.shape[0], -1)
+            grid = grid.repeat(self.anchor_nums[n], axis = 0)
             label_map[i:i+pred_boxes,[0,1]] = grid
             
             scale_anchors =  self.anchors[j: j + self.anchor_nums[n]]
             
+            
             scale_anchors = np.array(scale_anchors)
             
-            scale_anchors = scale_anchors.repeat(int(pred_boxes/self.anchor_nums[n]), axis = 0)
+            num_boxes_in_scale = int(pred_boxes/self.anchor_nums[n])
+            scale_anchors = scale_anchors.reshape(1,-1).repeat(num_boxes_in_scale, axis = 0).reshape(-1,2)
             
             label_map[i:i+pred_boxes,[2,3]] = scale_anchors
          
-            
             
             i += pred_boxes
             j += self.anchor_nums[n]
@@ -148,10 +152,6 @@ class CocoDataset(CocoDetection):
                 assert False
             
             
-            
-            center_cells = center_cells 
-            
-            
             a = offset + self.anchor_nums[n]*(inp_dim//self.strides[n]*center_cells[:,1] + center_cells[:,0])
             
             inds[:,sum(self.anchor_nums[:n])] = a
@@ -165,6 +165,7 @@ class CocoDataset(CocoDetection):
         
         candidate_boxes = label_map[inds][:,:,:4]
         
+
         
         
         
@@ -181,8 +182,14 @@ class CocoDataset(CocoDetection):
         
         candidate_ious = bbox_iou(candidate_boxes, ground_truth_boxes, lib = "numpy")
         
+        
+        
         prediction_boxes = np.zeros((num_ground_truth_in_im,1), dtype = np.int)
-
+#        
+#        print(inds)
+#        print(candidate_ious)
+#        print(label_map[[252,253,254]])
+#        assert False
         for i in range(num_ground_truth_in_im):
             #get the the row and the column of the highest IoU
             max_iou_ind = np.argmax(candidate_ious)
@@ -203,7 +210,7 @@ class CocoDataset(CocoDetection):
             #zero out all the values of the row representing gt that just got assigned so that it 
             #doesn't participate in the process again
             candidate_ious[max_iou_row] *= 0
-    
+        
         return (prediction_boxes)
     
     def get_ground_truth_map(self, ground_truth, label_map, ground_truth_predictors):
@@ -213,26 +220,49 @@ class CocoDataset(CocoDetection):
         
         predboxes[:,4] = 1
         
+
+        
         
         ground_truth_strides = self.box_strides[ground_truth_predictors]
         ground_truth[:,:4] /= ground_truth_strides
         
-        predboxes[:,[0,1]] = (ground_truth[:,[0,1]] - predboxes[:,[0,1]])
+#        if self.debug_id == 229:
+#            print(ground_truth[:,[0,1]])
+#            print(predboxes[:,[0,1]])
+##            predboxes[:,[0,1]] = (ground_truth[:,[0,1]] - predboxes[:,[0,1]])
+##            predboxes[:,[0,1]][predboxes[:,[0,1]] == 0] = 0.0001
+##            print(predboxes[:,[0,1]])
+#            assert False
+            
         
-        
-        
-        predboxes[:,[0,1]] = np.log(1/predboxes[:,[0,1]] - 1)
+        predboxes[:,[0,1]] = ground_truth[:,[0,1]] - predboxes[:,[0,1]]
 
-#        predboxes[:,:4] = 
         
         
-       
+        if 0 in predboxes[:,[0,1]]:
+            predboxes[:,[0,1]] += 0.0001*(predboxes[:,[0,1]] == 0)
+
+
+        predboxes[:,[0,1]] = -1*np.log(1/(predboxes[:,[0,1]]) - 1)
         
+        mask = np.logical_and(ground_truth[:,2], ground_truth[:,3])
         
-        cls_inds = (5 + ground_truth[:,4]).astype(int)
-        predboxes[np.arange(ground_truth.shape[0]).astype(int) , cls_inds] = 1    
+            
+        mask= mask.reshape(-1,1)
+        
+        ground_truth *= mask 
+        
+        ground_truth = ground_truth[np.nonzero(ground_truth[:,0])]
+        predboxes[:,[2,3]] = np.log(ground_truth[:,[2,3]] / predboxes[:,[2,3]])
+        
+                
+        
+        predboxes[:,5] = ground_truth[:,4]
         
         label_map[ground_truth_predictors] = predboxes
+        
+        
+#        print(predboxes)
         return label_map
     
 
@@ -241,6 +271,7 @@ class CocoDataset(CocoDetection):
     def __getitem__(self, idx):
          example = self.examples[idx]
          
+         
          path = os.path.join(self.root, example[0])
          image = cv2.imread(path)[:,:,::-1]   #Load the image from opencv and convert to RGB
          
@@ -248,24 +279,25 @@ class CocoDataset(CocoDetection):
          
          #seperate images, boxes and class_ids
          ground_truth = example[1]
-         
 
+         
+         self.debug_id = idx
          #apply the augmentations to the image and the bounding boxes
          if self.det_transforms:
              image, ground_truth = self.det_transforms(image, ground_truth)
+             
+        
 
-#         im_draw = draw_rect(image, ground_truth[:,:4])
-#         plt.imshow(im_draw)
-#         plt.show()
+         print(idx)
+#         
          #Convert the cv2 image into a PyTorch 
          image = image.transpose(2,0,1)/255.0
          image = torch.Tensor(image)
 
          ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
 
-
          #Generate a table of labels
-         label_table = np.zeros((sum(self.num_pred_boxes), 5 + self.num_classes), dtype = np.float)
+         label_table = np.zeros((sum(self.num_pred_boxes), 6), dtype = np.float)
          
          label_table = self.get_pred_box_cords(label_table)
          
@@ -275,10 +307,10 @@ class CocoDataset(CocoDetection):
          
          ground_truth_predictors = ground_truth_predictors.squeeze(1)
          
-         
 
-         
-         label_table[:,:4] //= self.box_strides 
+             
+         label_table[:,:2] //= self.box_strides 
+         label_table[:,[2,3]] /= self.box_strides
          
          
 
@@ -289,7 +321,7 @@ class CocoDataset(CocoDetection):
          
          ground_truth_map = torch.Tensor(ground_truth_map)
          
-        
+         
          
          return image, ground_truth_map
          
@@ -300,8 +332,8 @@ class CocoDataset(CocoDetection):
          
         
 ##        
-###    
-#coco = CocoDataset(root = "COCO/train2017", annFile="COCO_ann.pkl", det_transforms = transforms)
+####    
+#coco = CocoDataset(root = "COCO/train2017", annFile="COCO_ann_mod.pkl", det_transforms = transforms)
 ###
 #coco_loader = DataLoader(coco, batch_size = 5)
 #

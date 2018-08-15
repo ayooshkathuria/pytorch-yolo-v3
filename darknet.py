@@ -350,8 +350,6 @@ class Darknet(nn.Module):
         
         write = 0
         for i in range(len(modules)):       
-            print(i)
-            
             module_type = (modules[i]["type"])
             if module_type == "convolutional" or module_type == "upsample" or module_type == "maxpool":
                 x = self.module_list[i](x)
@@ -395,9 +393,12 @@ class Darknet(nn.Module):
                 #Get the number of classes
                 num_classes = int (modules[i]["classes"])
                 
+
                 #Output the result
-                x = x.data
-                x = predict_transform(x, inp_dim, anchors, num_classes)
+                if not self.training:
+                    x = x.data
+                
+                x = predict_transform(x, inp_dim, anchors, num_classes, train = self.training)
                 
                 if type(x) == int:
                     continue
