@@ -239,12 +239,14 @@ class CocoDataset(CocoDetection):
             
         
 
+
         try:
             predboxes[:,[0,1]] = ground_truth[:,[0,1]] - predboxes[:,[0,1]]
         
         except:
             print(self.debug_id)
-        
+            assert False
+
         
         if 0 in predboxes[:,[0,1]]:
             predboxes[:,[0,1]] += 0.0001*(predboxes[:,[0,1]] == 0)
@@ -260,13 +262,17 @@ class CocoDataset(CocoDetection):
         
         ground_truth *= mask 
         
-        ground_truth = ground_truth[np.nonzero(ground_truth[:,0])]
+        nz_inds = np.nonzero(ground_truth[:,0])
+        ground_truth = ground_truth[nz_inds]
+        predboxes = predboxes[nz_inds]
+        ground_truth_predictors = ground_truth_predictors[nz_inds]
         
         try:
             predboxes[:,[2,3]] = np.log(ground_truth[:,[2,3]] / predboxes[:,[2,3]])
         
         except:
             print(self.debug_id)
+            assert False
         
         predboxes[:,5] = ground_truth[:,4]
         
@@ -283,7 +289,9 @@ class CocoDataset(CocoDetection):
          example = self.examples[idx]
          
          
-         path = os.path.join(self.root, example[0])
+         
+         
+         path = os.path.join(self.root, "000000550395.jpg")
          image = cv2.imread(path)[:,:,::-1]   #Load the image from opencv and convert to RGB
          
          
