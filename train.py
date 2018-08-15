@@ -122,7 +122,10 @@ def logloss(pred, target):
     
     
     if int(torch.isnan(loss).any()):
-        pkl.dump((pred, target, sigmoid), open("nan_loss", "wb"))
+        pred_ = pred.detach().numpy()
+        target_ = target.detach().numpy()
+        sigmoid_ = sigmoid.detach().numpy()
+        pkl.dump((pred_, target_, sigmoid_), open("nan_loss", "wb"))
         assert False
         
     loss = torch.sum(loss) / loss.shape[0]
