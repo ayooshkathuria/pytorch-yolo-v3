@@ -238,12 +238,17 @@ class CocoDataset(CocoDetection):
 #            assert False
             
         
-        predboxes[:,[0,1]] = ground_truth[:,[0,1]] - predboxes[:,[0,1]]
 
+        try:
+            predboxes[:,[0,1]] = ground_truth[:,[0,1]] - predboxes[:,[0,1]]
+        
+        except:
+            print(self.debug_id)
         
         
         if 0 in predboxes[:,[0,1]]:
             predboxes[:,[0,1]] += 0.0001*(predboxes[:,[0,1]] == 0)
+
 
 
         predboxes[:,[0,1]] = -1*np.log(1/(predboxes[:,[0,1]]) - 1)
@@ -256,9 +261,12 @@ class CocoDataset(CocoDetection):
         ground_truth *= mask 
         
         ground_truth = ground_truth[np.nonzero(ground_truth[:,0])]
-        predboxes[:,[2,3]] = np.log(ground_truth[:,[2,3]] / predboxes[:,[2,3]])
         
-                
+        try:
+            predboxes[:,[2,3]] = np.log(ground_truth[:,[2,3]] / predboxes[:,[2,3]])
+        
+        except:
+            print(self.debug_id)
         
         predboxes[:,5] = ground_truth[:,4]
         
