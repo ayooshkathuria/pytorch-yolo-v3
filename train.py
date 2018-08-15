@@ -11,7 +11,7 @@ import cv2
 import pickle as pkl
 import matplotlib.pyplot as plt
 from bbox import bbox_iou, corner_to_center, center_to_corner
-import pickle
+import pickle 
 from cocoloader import *
 import torch.optim as optim
 random.seed(0)
@@ -114,13 +114,21 @@ def logloss(pred, target):
     pred = pred.view(-1)
     target = target.view(-1)
     
+    
     #check whether reshape has worked properly
     sigmoid = torch.nn.Sigmoid()(pred)    
     
     loss = -1 * (5*target*torch.log(sigmoid) + (1 - target)*torch.log(1 - sigmoid))
     
+    
+    if int(torch.isnan(loss).any()):
+        pkl.dump((pred, target, sigmoid), open("nan_loss", "wb"))
+        assert False
+        
     loss = torch.sum(loss) / loss.shape[0]
     
+    
+        
     
     return loss
     
