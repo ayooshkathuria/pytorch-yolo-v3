@@ -17,6 +17,7 @@ import torch.optim as optim
 random.seed(0)
 import torch.autograd.gradcheck
 from tensorboardX import SummaryWriter
+import sys 
 
 
 writer = SummaryWriter()
@@ -43,6 +44,11 @@ def arg_parse():
                         default = "yolov3.weights", type = str)
     parser.add_argument("--datacfg", dest = "datafile", help = "cfg file containing the configuration for the dataset",
                         type = str, default = "cfg/coco.data")
+    parser.add_argument("--lr", dest = "lr", type = float, default = 0.001)
+    parser.add_argument("--bs", dest = "bs", type = int, default = 1)
+    parser.add_argument("--mom", dest = "mom", type = float, default = 0)
+    parser.add_argument("--wd", dest = "wd", type = float, default = 0)
+
     return parser.parse_args()
 
 
@@ -51,7 +57,7 @@ args = arg_parse()
 args.weightsfile = "darknet53.conv.74"
 #Load the model
 model = Darknet(args.cfgfile).to(device)
-#model.load_weights(args.weightsfile, stop = 74)
+model.load_weights(args.weightsfile, stop = 74)
 model.train()
 #assert False
 model = model.to(device)  ## Really? You're gonna train on the CPU?
@@ -83,13 +89,24 @@ steps = net_options['steps']
 scales = net_options['scales']
 
 
+#lr = sys.argv[0]
+#wd = sys.argv[1]
+
+
+lr = args.lr
+wd = args.wd
+bs = args.bs
+momentum = args.mom
+
+
 inp_dim = 416
 transforms = Sequence([YoloResize(inp_dim)])
 
 coco = CocoDataset(root = "COCO/train2017", annFile="COCO_ann_mod.pkl", det_transforms = transforms)
 
-coco_loader = DataLoader(coco, batch_size = 1)
-optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.1)
+coco_loader = DataLoader(coco, batch_size = bs)
+optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay = wd)
+
 
 
 def logloss(pred, target):
@@ -102,7 +119,8 @@ def logloss(pred, target):
     
     loss = -1 * (5*target*torch.log(sigmoid) + (1 - target)*torch.log(1 - sigmoid))
     
-    loss = torch.sum(loss)
+    loss = torch.sum(loss) / loss.shape[0]
+    
     
     return loss
     
@@ -134,8 +152,9 @@ def YOLO_loss(ground_truth, output):
     centre_x_loss = sum(gt_ob[:,0] - pred_ob[:,0])**2 
     centre_y_loss = sum(gt_ob[:,1] - pred_ob[:,1])**2 
     
-    total_loss += centre_x_loss
-    total_loss += centre_y_loss
+    
+    total_loss += centre_x_loss / gt_ob.shape[0]
+    total_loss += centre_y_loss / gt_ob.shape[0]
     
 
 
@@ -145,18 +164,17 @@ def YOLO_loss(ground_truth, output):
     w_loss = sum((gt_ob[:,2]) - (pred_ob[:,2]))**2 
     h_loss = sum((gt_ob[:,3]) -  (pred_ob[:,3]))**2 
     
-    total_loss += w_loss 
-    total_loss += h_loss
+    total_loss += w_loss / gt_ob.shape[0]
+    total_loss += h_loss / gt_ob.shape[0]
     
 
 
     #class_loss 
     cls_scores = pred_ob[torch.arange(int(pred_ob.shape[0])).long()  , 5 + gt_ob[:,4].long()]
-    cls_loss = sum(-1*torch.log(torch.nn.Sigmoid()(cls_scores))) 
+    cls_loss = sum(-1*torch.log(torch.nn.Sigmoid()(cls_scores))) /gt_ob.shape[0]
     
     total_loss += cls_loss
     
-    total_loss /= gt_ob.shape[0]
     
     return total_loss
     
@@ -177,6 +195,9 @@ for batch in coco_loader:
     
  
     loss  = YOLO_loss(ground_truth, output)
+    
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = lr*pow((itern / 1000), 4)
     
     
     if loss:

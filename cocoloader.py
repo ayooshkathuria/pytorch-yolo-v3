@@ -288,7 +288,6 @@ class CocoDataset(CocoDetection):
              
         
 
-         print(idx)
 #         
          #Convert the cv2 image into a PyTorch 
          image = image.transpose(2,0,1)/255.0
