@@ -132,6 +132,7 @@ def YOLO_loss(ground_truth, output):
     objectness_target = ground_truth[:,:,4]
     objectness_pred = output[:,:,4]
     
+    
     objectness_loss = logloss(objectness_pred, objectness_target)
     
     total_loss += objectness_loss
@@ -210,7 +211,10 @@ for batch in coco_loader:
     
     print("\n\n")
     print("Ground_truth", torch.isnan(ground_truth).any())
- 
+    print("Output", torch.isnan(output).any())
+    print("Model Params: ", torch.isnan(model.parameters()).any())
+
+
     loss  = YOLO_loss(ground_truth, output)
     
     for param_group in optimizer.param_groups:
@@ -223,6 +227,7 @@ for batch in coco_loader:
         loss.backward()
         optimizer.step()
     
+
     itern += 1
     
 writer.close()
