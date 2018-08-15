@@ -190,6 +190,9 @@ def YOLO_loss(ground_truth, output):
 itern = 0
     
 for batch in coco_loader:
+    batch[0] = batch[0].cuda()
+    batch[1] = batch[1].cuda()
+    
     output = model(batch[0])
     ground_truth= batch[1]
     
