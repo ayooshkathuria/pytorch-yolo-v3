@@ -212,7 +212,6 @@ for batch in coco_loader:
     print("\n\n")
     print("Ground_truth", torch.isnan(ground_truth).any())
     print("Output", torch.isnan(output).any())
-    print("Model Params: ", torch.isnan(model.parameters()).any())
 
 
     loss  = YOLO_loss(ground_truth, output)
