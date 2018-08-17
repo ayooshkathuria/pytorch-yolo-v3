@@ -111,28 +111,43 @@ optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay
 
 def logloss(pred, target):
     assert pred.shape == target.shape, "Input and target must be the same shape"
-    pred = pred.view(-1)
-    target = target.view(-1)
+    pred = pred.view(-1,1)
+    target = target.view(-1,1)
     
     
-    #check whether reshape has worked properly
     sigmoid = torch.nn.Sigmoid()(pred)    
     
-    loss = -1 * (5*target*torch.log(sigmoid) + (1 - target)*torch.log(1 - sigmoid))
+    sigmoid = sigmoid.repeat(1,2)
     
+    sigmoid[:,0] = 1 - sigmoid[:,0]
+    
+    sigmoid = sigmoid[torch.arange(sigmoid.shape[0]).long(), target.squeeze().long()]
+        
+    loss = -1*torch.log(sigmoid)
+    
+#    loss[torch.nonzero(target).long()] *= 5
+        
     
     if int(torch.isnan(loss).any()):
-#        pred_ = pred.detach().cpu().numpy()
-#        target_ = target.detach().cpu().numpy()
-#        sigmoid_ = sigmoid.detach().cpu().numpy()
-#        pkl.dump((pred_, target_, sigmoid_), open("nan_loss", "wb"))
+        pred_ = pred.detach().cpu().numpy()
+        target_ = target.detach().cpu().numpy()
+        sigmoid_ = sigmoid.detach().cpu().numpy()
+        pkl.dump((pred_, target_, sigmoid_), open("nan_loss", "wb"))
+        
+        print("Nan Value Detected in the loss")
 
-        torch.save(sigmoid, "sigmoid_nan")
-        torch.save(pred, "pred_nan")
-        torch.save(target,"target_nan")
         
         assert False
         
+    if (loss == float("inf")).any() or (loss == float("-inf")).any():
+        print("Infinity encountered in loss")
+        
+        pred_ = pred.detach().cpu().numpy()
+        target_ = target.detach().cpu().numpy()
+        sigmoid_ = sigmoid.detach().cpu().numpy()
+        pkl.dump((pred_, target_, sigmoid_), open("inf_loss", "wb"))
+        
+        assert False
     loss = torch.sum(loss) / loss.shape[0]
     
     
@@ -174,8 +189,8 @@ def YOLO_loss(ground_truth, output):
     centre_y_loss = sum(gt_ob[:,1] - pred_ob[:,1])**2 
     
     print("Num_gt:", gt_ob.shape[0])
-    print("Center_x_loss", (centre_x_loss))
-    print("Center_y_loss", (centre_y_loss))
+    print("Center_x_loss", float(centre_x_loss))
+    print("Center_y_loss", float(centre_y_loss))
 
     
     
@@ -194,8 +209,8 @@ def YOLO_loss(ground_truth, output):
     total_loss += w_loss / gt_ob.shape[0]
     total_loss += h_loss / gt_ob.shape[0]
     
-    print("w_loss:", w_loss)
-    print("h_loss:", h_loss)
+    print("w_loss:", float(w_loss))
+    print("h_loss:", float(h_loss))
 
 
     #class_loss 
@@ -225,10 +240,25 @@ for batch in coco_loader:
     output = model(batch[0])
     ground_truth= batch[1]
     
+        
+    
     print("\n\n")
-    print("Ground_truth", torch.isnan(ground_truth).any())
-    print("Output", torch.isnan(output).any())
-
+    if (torch.isnan(ground_truth).any()):
+        print("Nans in Ground_truth")
+        assert False
+        
+    if (torch.isnan(output).any()):
+        print("Nans in Output")
+        assert False
+        
+    if (ground_truth == float("inf")).any() or (ground_truth == float("-inf")).any():
+        print("Inf in ground truth")
+        assert False
+        
+    
+    if (output == float("inf")).any() or (output == float("-inf")).any():
+        print("Inf in output")
+        assert False
 
     loss  = YOLO_loss(ground_truth, output)
     
