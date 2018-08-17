@@ -125,7 +125,7 @@ def logloss(pred, target):
         
     loss = -1*torch.log(sigmoid)
     
-#    loss[torch.nonzero(target).long()] *= 5
+    loss[torch.nonzero(target).long()] *= 5
         
     
     if int(torch.isnan(loss).any()):
@@ -148,6 +148,7 @@ def logloss(pred, target):
         pkl.dump((pred_, target_, sigmoid_), open("inf_loss", "wb"))
         
         assert False
+        
     loss = torch.sum(loss) / loss.shape[0]
     
     
@@ -263,9 +264,9 @@ for batch in coco_loader:
     loss  = YOLO_loss(ground_truth, output)
     
     for param_group in optimizer.param_groups:
-        param_group["lr"] = lr*pow((itern / 1000), 4)
+        param_group["lr"] = (lr*pow((itern / 2000), 4))/args.bs
     
-    
+    print(optimizer.param_groups[0]["lr"])
     if loss:
         print("Loss for iter no: {}: {}".format(itern, float(loss)))
         writer.add_scalar("Loss/vanilla", float(loss), itern)
