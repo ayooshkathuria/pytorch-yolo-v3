@@ -267,7 +267,7 @@ for batch in coco_loader:
     
     for param_group in optimizer.param_groups:
         if itern < 500:
-            param_group["lr"] = (lr*pow((itern / 500)))/args.bs
+            param_group["lr"] = (lr*pow((itern / 500),1))/args.bs
             
     
     print(optimizer.param_groups[0]["lr"])
