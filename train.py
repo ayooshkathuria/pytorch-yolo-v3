@@ -97,6 +97,8 @@ lr = args.lr
 wd = args.wd
 bs = args.bs
 momentum = args.mom
+momentum = 0.9
+wd = 0.0005
 
 
 inp_dim = 416
@@ -264,7 +266,9 @@ for batch in coco_loader:
     loss  = YOLO_loss(ground_truth, output)
     
     for param_group in optimizer.param_groups:
-        param_group["lr"] = (lr*pow((itern / 2000), 4))/args.bs
+        if itern < 500:
+            param_group["lr"] = (lr*pow((itern / 500)))/args.bs
+            
     
     print(optimizer.param_groups[0]["lr"])
     if loss:
