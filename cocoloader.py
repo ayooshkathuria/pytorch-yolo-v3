@@ -330,12 +330,9 @@ class CocoDataset(CocoDetection):
          example = self.examples[idx]
          
          
-         path = os.path.join(self.root, "000000040962.jpg")
+         path = os.path.join(self.root, example[0])
          image = cv2.imread(path)[:,:,::-1]   #Load the image from opencv and convert to RGB
-         
-         plt.imshow(image)
-         
-         im  = image.copy()
+                  
          
 
          
