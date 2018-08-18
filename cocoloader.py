@@ -330,9 +330,10 @@ class CocoDataset(CocoDetection):
          example = self.examples[idx]
          
          
-         path = os.path.join(self.root, example[0])
+         path = os.path.join(self.root, "000000040962.jpg")
          image = cv2.imread(path)[:,:,::-1]   #Load the image from opencv and convert to RGB
          
+         plt.imshow(image)
          
          im  = image.copy()
          
@@ -362,37 +363,42 @@ class CocoDataset(CocoDetection):
 
          ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
          
+         
+         if ground_truth.shape[0] > 0:
+             
 
-         #Generate a table of labels
-
-         
-
-         
-         #Get the bounding boxes to be assigned to the ground truth
-         ground_truth_predictors = self.get_ground_truth_predictors(ground_truth, label_table)
-         
-         
-         no_obj_cands = self.get_no_obj_candidates(ground_truth, label_table, ground_truth_predictors)
-
-         
-         ground_truth_predictors = ground_truth_predictors.squeeze(1)
-         
-         
-
-
-        
-         label_table[:,:2] //= self.box_strides 
-         label_table[:,[2,3]] /= self.box_strides
-         
-         
-
-         
-         ground_truth_map = self.get_ground_truth_map(ground_truth, label_table, ground_truth_predictors, no_obj_cands)
-         
-         
-         
-         ground_truth_map = torch.Tensor(ground_truth_map)
-         
+             #Generate a table of labels
+    
+             
+    
+             
+             #Get the bounding boxes to be assigned to the ground truth
+             ground_truth_predictors = self.get_ground_truth_predictors(ground_truth, label_table)
+             
+             
+             no_obj_cands = self.get_no_obj_candidates(ground_truth, label_table, ground_truth_predictors)
+    
+             
+             ground_truth_predictors = ground_truth_predictors.squeeze(1)
+             
+             
+    
+    
+            
+             label_table[:,:2] //= self.box_strides 
+             label_table[:,[2,3]] /= self.box_strides
+             
+             
+    
+             
+             ground_truth_map = self.get_ground_truth_map(ground_truth, label_table, ground_truth_predictors, no_obj_cands)
+             
+             
+             
+             ground_truth_map = torch.Tensor(ground_truth_map)
+         else:
+            ground_truth_map = torch.Tensor(label_table)
+    
          
          
          return image, ground_truth_map
@@ -404,7 +410,7 @@ class CocoDataset(CocoDetection):
          
         
 ##        
-####    
+#####    
 #coco = CocoDataset(root = "COCO/train2017", annFile="COCO_ann_mod.pkl", det_transforms = transforms)
 ###
 #coco_loader = DataLoader(coco, batch_size = 5)
