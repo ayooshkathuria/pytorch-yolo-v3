@@ -99,7 +99,6 @@ bs = args.bs
 momentum = args.mom
 momentum = 0.9
 wd = 0.0005
-bs = 2
 
 
 inp_dim = 416

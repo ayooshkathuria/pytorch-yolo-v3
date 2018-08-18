@@ -360,7 +360,6 @@ class CocoDataset(CocoDetection):
          
          label_table = self.get_pred_box_cords(label_table)
 
-         im = (draw_rect(im, ground_truth[0,:4]))
          ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
          
 
