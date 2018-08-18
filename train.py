@@ -92,13 +92,14 @@ scales = net_options['scales']
 #lr = sys.argv[0]
 #wd = sys.argv[1]
 
-
+num_classes = 80
 lr = args.lr
 wd = args.wd
 bs = args.bs
 momentum = args.mom
 momentum = 0.9
 wd = 0.0005
+bs = 2
 
 
 inp_dim = 416
@@ -149,7 +150,6 @@ def logloss(pred, target):
         sigmoid_ = sigmoid.detach().cpu().numpy()
         pkl.dump((pred_, target_, sigmoid_), open("inf_loss", "wb"))
         
-        assert False
         
     loss = torch.sum(loss) / loss.shape[0]
     
@@ -163,20 +163,24 @@ def YOLO_loss(ground_truth, output):
     total_loss = 0
     
     #get the objectness loss
-    objectness_target = ground_truth[:,:,4]
-    objectness_pred = output[:,:,4]
+    loss_inds = torch.nonzero(ground_truth[:,:,-4] > -1)
     
     
-    objectness_loss = logloss(objectness_pred, objectness_target)
+    objectness_pred = output[loss_inds[:,0],loss_inds[:,1],4]
     
-    total_loss += objectness_loss
+    target = ground_truth[loss_inds[:,0],loss_inds[:,1],4]
+    
+    
+    objectness_loss = torch.nn.MSELoss(size_average=False)(objectness_pred, target)
+    
+    
     
     print("Obj Loss", objectness_loss)
 
     
     
     #Only objectness loss is counted for all boxes
-    object_box_inds = torch.nonzero(ground_truth[:,:,4]).view(-1, 2)
+    object_box_inds = torch.nonzero(ground_truth[:,:,4] > 0).view(-1, 2)
     
 
     
@@ -188,8 +192,8 @@ def YOLO_loss(ground_truth, output):
     pred_ob = output[object_box_inds[:,0], object_box_inds[:,1]]
     
     #get centre x and centre y 
-    centre_x_loss = sum(gt_ob[:,0] - pred_ob[:,0])**2 
-    centre_y_loss = sum(gt_ob[:,1] - pred_ob[:,1])**2 
+    centre_x_loss = torch.nn.MSELoss(size_average=False)(pred_ob[:,0], gt_ob[:,0])
+    centre_y_loss = torch.nn.MSELoss(size_average=False)(pred_ob[:,1], gt_ob[:,1])
     
     print("Num_gt:", gt_ob.shape[0])
     print("Center_x_loss", float(centre_x_loss))
@@ -198,29 +202,59 @@ def YOLO_loss(ground_truth, output):
     
     
     
-    total_loss += centre_x_loss / gt_ob.shape[0]
-    total_loss += centre_y_loss / gt_ob.shape[0]
-    
-
-
-
+    total_loss += centre_x_loss 
+    total_loss += centre_y_loss 
     
     #get w,h loss
-    w_loss = sum((gt_ob[:,2]) - (pred_ob[:,2]))**2 
-    h_loss = sum((gt_ob[:,3]) -  (pred_ob[:,3]))**2 
+    w_loss = torch.nn.MSELoss(size_average=False)(pred_ob[:,2], gt_ob[:,2])
+    h_loss = torch.nn.MSELoss(size_average=False)(pred_ob[:,3], gt_ob[:,3])
     
-    total_loss += w_loss / gt_ob.shape[0]
-    total_loss += h_loss / gt_ob.shape[0]
+    total_loss += w_loss 
+    total_loss += h_loss 
     
     print("w_loss:", float(w_loss))
     print("h_loss:", float(h_loss))
 
 
     #class_loss 
-    cls_scores = pred_ob[torch.arange(int(pred_ob.shape[0])).long()  , 5 + gt_ob[:,4].long()]
-    cls_loss = sum(-1*torch.log(torch.nn.Sigmoid()(cls_scores))) /gt_ob.shape[0]
+    cls_scores_pred = pred_ob[:,5:]
     
+    
+    cls_scores_target = gt_ob[:,5].long()
+    
+    
+    
+    
+    
+    
+    cls_scores_pred = torch.log(torch.sigmoid(cls_scores_pred))
+    
+#    print(cls_scores_pred.shape)
+#    print(cls_scores_target.shape)
+#    cls_loss = torch.nn.NLLLoss(size_average=False, reduce = False)(cls_scores_pred, cls_scores_target)
+        
+    cls_loss = 0
+    
+    cls_labels = torch.zeros(gt_ob.shape[0], num_classes)
+    
+    cls_labels[torch.arange(gt_ob.shape[0]).long(), gt_ob[:,5].long()] = 1
+    
+    
+    cls_loss = 0    
+    
+    for cls in range(num_classes):
+        targ_labels = pred_ob[:,5 + cls].view(-1,1)
+        targ_labels = targ_labels.repeat(1,2)
+        targ_labels[:,0] = 1 - targ_labels[:,0]
+        cls_loss += torch.nn.CrossEntropyLoss(size_average=False)(targ_labels, cls_labels[:,cls].long())
+        
+    
+    
+    
+    print(cls_loss)
     total_loss += cls_loss
+    
+    
     
     
     return total_loss
@@ -267,12 +301,16 @@ for batch in coco_loader:
     
     for param_group in optimizer.param_groups:
         if itern < 2000:
-            param_group["lr"] = (lr*pow((itern / 2000),4))/args.bs
+            param_group["lr"] = (lr*pow((itern / 2000),4))
+            
+        param_group["lr"] /= args.bs
+            
+        
             
     
     print(optimizer.param_groups[0]["lr"])
     if loss:
-        print("Loss for iter no: {}: {}".format(itern, float(loss)))
+        print("Loss for iter no: {}: {}".format(itern, float(loss)/args.bs))
         writer.add_scalar("Loss/vanilla", float(loss), itern)
         loss.backward()
         optimizer.step()

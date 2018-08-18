@@ -95,6 +95,7 @@ class CocoDataset(CocoDetection):
     def set_inp_dim(self, inp_dim):
         self.inp_dim = inp_dim
         
+        
     def get_num_pred_boxes(self):    
         detection_map_dims = [(self.inp_dim//stride) for stride in self.strides]
         return [self.anchor_nums[i]*detection_map_dims[i]**2 for i in range(len(detection_map_dims))]
@@ -130,7 +131,7 @@ class CocoDataset(CocoDetection):
             j += self.anchor_nums[n]
         return label_map        
 
-    def get_ground_truth_predictors(self, ground_truth, label_map):
+    def get_ground_truth_predictors(self, ground_truth, label_map, im = None):
         i = 0    #indexes the anchor boxes
         j = 0    
                 
@@ -138,8 +139,7 @@ class CocoDataset(CocoDetection):
         
         num_ground_truth_in_im = ground_truth.shape[0]
         
-        
-        
+
         inds = np.zeros((num_ground_truth_in_im, total_boxes_per_gt), dtype = np.int)
         
         #n index the the detection maps
@@ -168,14 +168,18 @@ class CocoDataset(CocoDetection):
 
         
         
-        
+    
         
         candidate_boxes = center_to_corner(candidate_boxes)
+        
+        
+                
+
         
     
         ground_truth_boxes = center_to_corner(ground_truth.copy()[np.newaxis]).squeeze(0)[:,:4]
         
-    
+
         candidate_boxes = candidate_boxes.transpose(0,2,1)
         
         ground_truth_boxes = ground_truth_boxes[:,:,np.newaxis]
@@ -185,7 +189,7 @@ class CocoDataset(CocoDetection):
         
         
         prediction_boxes = np.zeros((num_ground_truth_in_im,1), dtype = np.int)
-#        
+
 #        print(inds)
 #        print(candidate_ious)
 #        print(label_map[[252,253,254]])
@@ -213,13 +217,58 @@ class CocoDataset(CocoDetection):
         
         return (prediction_boxes)
     
-    def get_ground_truth_map(self, ground_truth, label_map, ground_truth_predictors):
+    def get_no_obj_candidates(self, ground_truth, label_map, ground_truth_predictors):
+                
+        total_boxes_per_gt = sum(self.anchor_nums)
+        
+        num_ground_truth_in_im = ground_truth.shape[0]
+        
+        
+        
+        inds = np.zeros((num_ground_truth_in_im, total_boxes_per_gt), dtype = np.int)
+        
+        inds = np.arange(sum(self.num_pred_boxes)).astype(int)
+        
+        inds = inds[np.newaxis].repeat(num_ground_truth_in_im, axis = 0)
+        
+        
+        candidate_boxes = label_map[inds][:,:,:4]
+        
+        candidate_boxes = center_to_corner(candidate_boxes)
+        
+        
+        
+    
+        ground_truth_boxes = center_to_corner(ground_truth.copy()[np.newaxis]).squeeze(0)[:,:4]
+        
+    
+        candidate_boxes = candidate_boxes.transpose(0,2,1)
+        
+        ground_truth_boxes = ground_truth_boxes[:,:,np.newaxis]
+        
+        candidate_ious = bbox_iou(candidate_boxes, ground_truth_boxes, lib = "numpy")
+        
+        candidate_ious[:, ground_truth_predictors] = 1
+        
+        
+        max_ious_per_box = np.max(candidate_ious, 0)
+        
+        no_obj_cands = (np.nonzero(max_ious_per_box < 0.5)[0].astype(int))
+        
+        return no_obj_cands
+        
+        
+    def get_ground_truth_map(self, ground_truth, label_map, ground_truth_predictors, no_obj_cands):
     
         #Set the objectness confidence of these boxes to 1
+        
+        label_map[:,4] = -1
         
         predboxes = label_map[ground_truth_predictors]
         
         predboxes[:,4] = 1
+        
+        label_map[no_obj_cands] = 0
         
         assert ground_truth_predictors.shape[0] == predboxes.shape[0], print(self.debug_id)
         
@@ -229,14 +278,6 @@ class CocoDataset(CocoDetection):
         ground_truth_strides = self.box_strides[ground_truth_predictors]
         ground_truth[:,:4] /= ground_truth_strides
         
-#        if self.debug_id == 229:
-#            print(ground_truth[:,[0,1]])
-#            print(predboxes[:,[0,1]])
-##            predboxes[:,[0,1]] = (ground_truth[:,[0,1]] - predboxes[:,[0,1]])
-##            predboxes[:,[0,1]][predboxes[:,[0,1]] == 0] = 0.0001
-##            print(predboxes[:,[0,1]])
-#            assert False
-            
         
 
 
@@ -289,51 +330,65 @@ class CocoDataset(CocoDetection):
          example = self.examples[idx]
          
          
-         
-         
          path = os.path.join(self.root, example[0])
          image = cv2.imread(path)[:,:,::-1]   #Load the image from opencv and convert to RGB
          
          
+         im  = image.copy()
+         
+
+         
          
          #seperate images, boxes and class_ids
          ground_truth = example[1]
-
          
+
+
          self.debug_id = example[0]
          #apply the augmentations to the image and the bounding boxes
          if self.det_transforms:
              image, ground_truth = self.det_transforms(image, ground_truth)
              
         
-        
+         im = image.copy()
 #         
          #Convert the cv2 image into a PyTorch 
          image = image.transpose(2,0,1)/255.0
          image = torch.Tensor(image)
-
-         ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
-
-         #Generate a table of labels
+         
          label_table = np.zeros((sum(self.num_pred_boxes), 6), dtype = np.float)
          
          label_table = self.get_pred_box_cords(label_table)
+
+         im = (draw_rect(im, ground_truth[0,:4]))
+         ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
          
+
+         #Generate a table of labels
+
+         
+
          
          #Get the bounding boxes to be assigned to the ground truth
          ground_truth_predictors = self.get_ground_truth_predictors(ground_truth, label_table)
          
+         
+         no_obj_cands = self.get_no_obj_candidates(ground_truth, label_table, ground_truth_predictors)
+
+         
          ground_truth_predictors = ground_truth_predictors.squeeze(1)
          
+         
 
-             
+
+        
          label_table[:,:2] //= self.box_strides 
          label_table[:,[2,3]] /= self.box_strides
          
          
 
          
-         ground_truth_map = self.get_ground_truth_map(ground_truth, label_table, ground_truth_predictors)
+         ground_truth_map = self.get_ground_truth_map(ground_truth, label_table, ground_truth_predictors, no_obj_cands)
          
          
          
