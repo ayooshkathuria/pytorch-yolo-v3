@@ -235,7 +235,7 @@ def YOLO_loss(ground_truth, output):
         
     cls_loss = 0
     
-    cls_labels = torch.zeros(gt_ob.shape[0], num_classes)
+    cls_labels = torch.zeros(gt_ob.shape[0], num_classes).to(device)
     
     cls_labels[torch.arange(gt_ob.shape[0]).long(), gt_ob[:,5].long()] = 1
     
