@@ -206,36 +206,12 @@ def create_modules(blocks):
         
         #If it is a route layer
         elif (x["type"] == "route"):
-            x["layers"] = x["layers"].split(',')
-            
-            #Start  of a route
-            start = int(x["layers"][0])
-            
-            #end, if there exists one.
-            try:
-                end = int(x["layers"][1])
-            except:
-                end = 0
-                
-            
-            
-            #Positive anotation
-            if start > 0: 
-                start = start - index
-            
-            if end > 0:
-                end = end - index
 
             
             route = EmptyLayer()
             module.add_module("route_{0}".format(index), route)
             
-            
-            
-            if end < 0:
-                filters = output_filters[index + start] + output_filters[index + end]
-            else:
-                filters= output_filters[index + start]
+            filters = sum([output_filters[int(i)] for i in x['layers'].split(',')])
                         
             
         
