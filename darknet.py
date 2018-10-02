@@ -305,12 +305,10 @@ class Darknet(nn.Module):
 
                 
     def forward(self, x, CUDA):
-        detections = []
         modules = self.blocks[1:]
         outputs = {}   #We cache the outputs for the route layer
+        detections = torch.empty(0)   # concatenate all bbox predictions to this initially empty tensor
         
-        
-        write = 0
         for i in range(len(modules)):        
             
             module_type = (modules[i]["type"])
@@ -364,17 +362,7 @@ class Darknet(nn.Module):
                 if type(x) == int:
                     continue
 
-                
-                if not write:
-                    detections = x
-                    write = 1
-                
-                else:
-                    detections = torch.cat((detections, x), 1)
-                
-                outputs[i] = outputs[i-1]
-                
-        
+                detections = torch.cat((detections, x), dim=1)
         
         try:
             return detections
