@@ -259,7 +259,7 @@ def create_modules(blocks):
         #Yolo is the detection layer
         elif x["type"] == "yolo":
             mask = x["mask"].split(",")
-            mask = [int(x) for x in mask]
+            mask = [int(i) for i in mask]
             
             
             anchors = x["anchors"].split(",")
