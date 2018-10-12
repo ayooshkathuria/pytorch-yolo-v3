@@ -1,8 +1,14 @@
+"""
+Training script for PyTorch Darknet model.
+
+e.g. python train.py --cfg cfg/yolov3-tiny-1xclass.cfg --weights yolov3-tiny.weights --datacfg data/obj.data
+
+"""
+
 import torch
 import os
 import argparse
 from darknet import *
-#from cocoloader import transform_annotation
 from util import *
 from data_aug.data_aug import *
 from preprocess import *
@@ -12,7 +18,7 @@ import pickle as pkl
 import matplotlib.pyplot as plt
 from bbox import bbox_iou, corner_to_center, center_to_corner
 import pickle 
-from cocoloader import *
+from customloader import *
 import torch.optim as optim
 random.seed(0)
 import torch.autograd.gradcheck
@@ -54,10 +60,10 @@ def arg_parse():
 
 args = arg_parse()
 
-args.weightsfile = "darknet53.conv.74"
+# args.weightsfile = "darknet53.conv.74"
 #Load the model
 model = Darknet(args.cfgfile).to(device)
-model.load_weights(args.weightsfile, stop = 74)
+model.load_weights(args.weightsfile, stop = 18)
 model.train()
 #assert False
 model = model.to(device)  ## Really? You're gonna train on the CPU?
@@ -87,12 +93,9 @@ max_batches = net_options['max_batches']
 policy = net_options['policy']
 steps = net_options['steps']
 scales = net_options['scales']
+num_classes = net_options['classes']
 
-
-#lr = sys.argv[0]
-#wd = sys.argv[1]
-
-num_classes = 80
+# Assign from the command line args
 lr = args.lr
 wd = args.wd
 bs = args.bs
@@ -102,9 +105,10 @@ wd = 0.0005
 
 
 inp_dim = 416
+num_classes = int(num_classes)
 transforms = Sequence([YoloResize(inp_dim)])
 
-coco = CocoDataset(root = "COCO/train2017", annFile="COCO_ann_mod.pkl", det_transforms = transforms)
+coco = CocoDataset(root = "data", annFile="data/train.txt", det_transforms = transforms)
 
 coco_loader = DataLoader(coco, batch_size = bs)
 optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay = wd)
@@ -158,7 +162,7 @@ def logloss(pred, target):
     return loss
     
 def YOLO_loss(ground_truth, output):
-    
+
     total_loss = 0
     
     #get the objectness loss
@@ -241,11 +245,12 @@ def YOLO_loss(ground_truth, output):
     
     cls_loss = 0    
     
-    for cls in range(num_classes):
-        targ_labels = pred_ob[:,5 + cls].view(-1,1)
+    for c_n in range(num_classes):
+        print('pred_ob', pred_ob)
+        targ_labels = pred_ob[:,5 + c_n].view(-1,1)
         targ_labels = targ_labels.repeat(1,2)
         targ_labels[:,0] = 1 - targ_labels[:,0]
-        cls_loss += torch.nn.CrossEntropyLoss(size_average=False)(targ_labels, cls_labels[:,cls].long())
+        cls_loss += torch.nn.CrossEntropyLoss(size_average=False)(targ_labels, cls_labels[:,c_n].long())
         
     
     
@@ -275,7 +280,8 @@ for batch in coco_loader:
     
     output = model(batch[0])
     ground_truth= batch[1]
-    
+
+    print('Iteration ', itern)    
         
     
     print("\n\n")
@@ -318,6 +324,9 @@ for batch in coco_loader:
     itern += 1
     
 writer.close()
+
+# Save final model in pytorch format (the state dictionary only, i.e. parameters only)
+torch.save(model.state_dict(), os.path.join('runs', 'epoch{}-bs{}-loss{}.weights'.format(itern, bs, loss)))
     
     
 

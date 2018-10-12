@@ -444,7 +444,7 @@ class Darknet(nn.Module):
         for i in range(len(self.module_list)):
             module_type = self.blocks[i + 1]["type"]
             
-            if i == stop + 1:
+            if stop != None and (i == stop + 1):
                 return
             
             if module_type == "convolutional":

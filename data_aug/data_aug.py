@@ -850,8 +850,10 @@ class YoloResize(object):
         self.inp_dim = inp_dim
     
     def __call__(self, img, bboxes):
+        img, bboxes = bboxes # TODO: fix bboxes (it also hold img data for custom)
         w,h = img.shape[1], img.shape[0]
         img = letterbox_image(img, self.inp_dim)
+        print(img.shape[1], img.shape[0], bboxes)
         
 
         scale = min(self.inp_dim/h, self.inp_dim/w)

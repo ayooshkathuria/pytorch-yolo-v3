@@ -64,8 +64,7 @@ def arg_parse():
     parser = argparse.ArgumentParser(description='YOLO v3 Video Detection Module')
    
     parser.add_argument("--video", dest = 'video', help = 
-                        "Video to run detection upon",
-                        default = "video.mp4", type = str)
+                        "Video to run detection upon", type = str)
     parser.add_argument("--dataset", dest = "dataset", help = "Dataset on which the network has been trained", default = "pascal")
     parser.add_argument("--confidence", dest = "confidence", help = "Object Confidence to filter predictions", default = 0.5)
     parser.add_argument("--nms_thresh", dest = "nms_thresh", help = "NMS Threshhold", default = 0.4)
@@ -75,6 +74,8 @@ def arg_parse():
     parser.add_argument("--weights", dest = 'weightsfile', help = 
                         "weightsfile",
                         default = "yolov3.weights", type = str)
+    parser.add_argument("--datacfg", dest = "datafile", help = "cfg file containing the configuration for the dataset",
+                        type = str, default = "cfg/coco.data")
     parser.add_argument("--reso", dest = 'reso', help = 
                         "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
                         default = "416", type = str)
@@ -90,31 +91,31 @@ if __name__ == '__main__':
     CUDA = torch.cuda.is_available()
     
     device = torch.device("cuda:0" if CUDA else "cpu")
-
-    num_classes = 80
-
     
-    bbox_attrs = 5 + num_classes
     
     print("Loading network.....")
     model = Darknet(args.cfgfile)
-    model.load_weights(args.weightsfile)
+    model.load_state_dict(torch.load(args.weightsfile))
     print("Network successfully loaded")
 
     model.net_info["height"] = args.reso
     inp_dim = int(model.net_info["height"])
     assert inp_dim % 32 == 0 
     assert inp_dim > 32
+    num_classes = int(model.net_info["classes"])
+    bbox_attrs = 5 + num_classes
+
 
     model = model.to(device)
     
 
     model.eval()
     
-    videofile = args.video
-    
-    cap = cv2.VideoCapture(videofile)
-    
+    if args.video: # video file
+        videofile = args.video
+        cap = cv2.VideoCapture(videofile)
+    else: # webcam
+        cap = cv2.VideoCapture(0) # TODO: webcam video source options
     assert cap.isOpened(), 'Cannot capture source'
     
     frames = 0
@@ -161,7 +162,7 @@ if __name__ == '__main__':
 #                output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, im_dim[i,0])
 #                output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, im_dim[i,1])
             
-            classes = load_classes('data/coco.names')
+            classes = load_classes(args.datafile)
             colors = pkl.load(open("pallete", "rb"))
             
             list(map(lambda x: write(x, orig_im), output))

@@ -1,0 +1,7 @@
+data/obj/pl14.jpeg
+data/obj/pl21.jpeg
+data/obj/pl28.jpeg
+data/obj/pl30.jpeg
+data/obj/pl3.jpeg
+data/obj/pl6.jpeg
+data/obj/pl7.jpeg

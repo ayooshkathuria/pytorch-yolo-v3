@@ -1,93 +1,62 @@
-# A PyTorch implementation of a YOLO v3 Object Detector
+# A Fork of PyTorch Implemation of YOLOv3 for Custom Data
 
-[UPDATE] : This repo serves as a driver code for my research. I just graduated college, and am very busy looking for research internship / fellowship roles before eventually applying for a masters. I won't have the time to look into issues for the time being. Thank you.
+_We love you COCO, but we have our own interests now._
 
+This project is a "You Only Look Once" v3 sample using PyTorch, a fork of https://github.com/ayooshkathuria/pytorch-yolo-v3, with updates and improvements specifically for the Tiny architecture on custom data labeled with VoTT (versus the classic download of VOC or COCO data and labels).  This fork allows the user to create their own dataset.
 
-This repository contains code for a object detector based on [YOLOv3: An Incremental Improvement](https://pjreddie.com/media/files/papers/YOLOv3.pdf), implementedin PyTorch. The code is based on the official code of [YOLO v3](https://github.com/pjreddie/darknet), as well as a PyTorch 
-port of the original code, by [marvis](https://github.com/marvis/pytorch-yolo2). One of the goals of this code is to improve
-upon the original port by removing redundant parts of the code (The official code is basically a fully blown deep learning 
-library, and includes stuff like sequence models, which are not used in YOLO). I've also tried to keep the code minimal, and 
-document it as well as I can. 
+Note:  This project is a work in progress and is based upon a research effort.
 
-### Tutorial for building this detector from scratch
-If you want to understand how to implement this detector by yourself from scratch, then you can go through this very detailed 5-part tutorial series I wrote on Paperspace. Perfect for someone who wants to move from beginner to intermediate pytorch skills. 
+## Setup
 
-[Implement YOLO v3 from scratch](https://blog.paperspace.com/how-to-implement-a-yolo-object-detector-in-pytorch/)
+Install the required Python packages (`pip install -r requirements.txt`).
 
-As of now, the code only contains the detection module, but you should expect the training module soon. :) 
+## Collect and Label Data
 
-## Requirements
-1. Python 3.5
-2. OpenCV
-3. PyTorch 0.4
+1. Use the [VoTT](https://github.com/Microsoft/VoTT) labeling tool to create bounding boxes around objects of interest in images and export to YOLO format.  The `data` output folder should be a subdirectory here with the images, labels and pointer file.
+2. If you wish to train on all labeled images, make sure they are all in the `train.txt` file (this is read by the `customloader.py`).
 
-Using PyTorch 0.3 will break the detector.
+## Train
 
+Ensure the `yolov3-tiny.cfg` is set up to train (see first lines of file).  Note, the number of classes will affect the last convolutional layer filter numbers (conv layers before the yolo layer) as well as the yolo layers themselves - so will need to be modified manually to suit the needs of the user.  The tiny architecture has 6 anchors, whereas, the non-tiny or full sized YOLOv3 architecture has 9 anchors.  These anchors should be manually discovered with `kmeans.py` and specified in the `cfg` file. 
 
+Cmd:
 
-## Detection Example
+    python train.py --cfg cfg/yolov3-tiny.cfg --weights yolov3-tiny.weights --datacfg data/obj.data
 
-![Detection Example](https://i.imgur.com/m2jwneng.png)
-## Running the detector
+Usage:
 
-### On single or multiple images
+    python train.py --help
 
-Clone, and `cd` into the repo directory. The first thing you need to do is to get the weights file
-This time around, for v3, authors has supplied a weightsfile only for COCO [here](https://pjreddie.com/media/files/yolov3.weights), and place 
+## Demo
 
-the weights file into your repo directory. Or, you could just type (if you're on Linux)
+Here, you will use your trained model in a live video feed.  Ensure the `yolov3-tiny.cfg` is set up to test (see first lines of file).  `runs` is where trained models get saved by default.
 
-```
-wget https://pjreddie.com/media/files/yolov3.weights 
-python detect.py --images imgs --det det 
-```
+Cmd:
+
+    python video_demo.py --cfg cfg/yolov3-tiny.cfg --weights runs/<your trained model>.weights --datacfg data/obj.data
+
+Usage:
+    
+    python video_demo.py --help
 
 
-`--images` flag defines the directory to load images from, or a single image file (it will figure it out), and `--det` is the directory
-to save images to. Other setting such as batch size (using `--bs` flag) , object threshold confidence can be tweaked with flags that can be looked up with. 
+## Updates/Improvements
 
-```
-python detect.py -h
-```
+* Custom data possibility
+* Clean up of several portions of code and generalizing/parameterizing
 
-### Speed Accuracy Tradeoff
-You can change the resolutions of the input image by the `--reso` flag. The default value is 416. Whatever value you chose, rememeber **it should be a multiple of 32 and greater than 32**. Weird things will happen if you don't. You've been warned. 
+## Helpful Definitions
 
-```
-python detect.py --images imgs --det det --reso 320
-```
+- YOLOv3:  You Only Look Once v3.  Improvments over v1, v2 and YOLO9000 which include [Ref](https://towardsdatascience.com/yolo-v3-object-detection-53fb7d3bfe6b):
+  - Predicts more bounding boxes per image (hence a bit slower)
+  - Detections at 3 scales
+  - Addressed issue of detecting small objects
+  - New loss function (cross-entropy replaces squared error terms)
+  - Can perform multi-label classification (no more mutually exclusive labels)
+  - Performance on par with other architectures (a bit faster than SSD, even)
+- Tiny-YOLOv3:  A reduced network architecture for smaller models designed for mobile, IoT and edge device scenarios
+- Anchors:  There are 5 anchors per box.  The anchor boxes are designed for a specific dataset using K-means clustering, i.e., a custom dataset must use K-means clustering to generate anchor boxes.  It does not assume the aspect ratios or shapes of the boxes. [Ref](https://medium.com/@vivek.yadav/part-1-generating-anchor-boxes-for-yolo-like-network-for-vehicle-detection-using-kitti-dataset-b2fe033e5807)
+- Loss, `loss.backward()` and `nn.MSELoss` (for loss confidence):  Mean Squared Error
+- IOU:  intersection over union between predicted bounding boxes and ground truth boxes
 
-### On Video
-For this, you should run the file, video_demo.py with --video flag specifying the video file. The video file should be in .avi format
-since openCV only accepts OpenCV as the input format. 
-
-```
-python video_demo.py --video video.avi
-```
-
-Tweakable settings can be seen with -h flag. 
-
-### Speeding up Video Inference
-
-To speed video inference, you can try using the video_demo_half.py file instead which does all the inference with 16-bit half 
-precision floats instead of 32-bit float. I haven't seen big improvements, but I attribute that to having an older card 
-(Tesla K80, Kepler arch). If you have one of cards with fast float16 support, try it out, and if possible, benchmark it. 
-
-### On a Camera
-Same as video module, but you don't have to specify the video file since feed will be taken from your camera. To be precise, 
-feed will be taken from what the OpenCV, recognises as camera 0. The default image resolution is 160 here, though you can change it with `reso` flag.
-
-```
-python cam_demo.py
-```
-You can easily tweak the code to use different weightsfiles, available at [yolo website](https://pjreddie.com/darknet/yolo/)
-
-NOTE: The scales features has been disabled for better refactoring.
-### Detection across different scales
-YOLO v3 makes detections across different scales, each of which deputise in detecting objects of different sizes depending upon whether they capture coarse features, fine grained features or something between. You can experiment with these scales by the `--scales` flag. 
-
-```
-python detect.py --scales 1,3
-```
-
-
+**The original YOLOv3 paper by Joseph Redmon and Ali Farhadi:  https://arxiv.org/pdf/1804.02767.pdf**

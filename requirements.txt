@@ -1,0 +1,6 @@
+torch==0.4.1
+pandas==0.23.4
+numpy==1.15.2
+pycocotools==2.0.0
+tensorboardX==1.4
+opencv-python==3.4.3.18
