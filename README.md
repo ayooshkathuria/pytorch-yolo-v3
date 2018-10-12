@@ -8,7 +8,8 @@ Note:  This project is a work in progress and is based upon a research effort.
 
 ## Setup
 
-Install the required Python packages (`pip install -r requirements.txt`).
+* Install the required Python packages (`pip install -r requirements.txt`).
+* Download the [full YOLO v3 (237 MB)](https://pjreddie.com/media/files/yolov3.weights) or [tiny YOLO v3 (33.8 MB)](https://pjreddie.com/media/files/yolov3-tiny.weights) model.
 
 ## Collect and Label Data
 
