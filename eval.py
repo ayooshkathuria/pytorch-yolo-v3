@@ -6,8 +6,12 @@ import random
 from customloader import CustomDataset, YoloResize
 from torch.utils.data import DataLoader
 from data_aug.data_aug import Sequence
-from util import bbox_iou
+from bbox import bbox_iou
+from util import write_results, de_letter_box
+from live import prep_image
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 random.seed(0)
 
@@ -27,38 +31,6 @@ def arg_parse():
                         default = "yolov3.weights", type = str)
 
     return parser.parse_args()
-
-
-def score_pred(ground_truth, output):
-    
-    total_loss = 0
-    
-    #get the objectness loss
-    loss_inds = torch.nonzero(ground_truth[:,:,-4] > -1)
-    objectness_pred = output[loss_inds[:,0],loss_inds[:,1],4]
-    target = ground_truth[loss_inds[:,0],loss_inds[:,1],4]
-    
-    #Only objectness loss is counted for all boxes
-    object_box_inds = torch.nonzero(ground_truth[:,:,4] > 0).view(-1, 2)
-    
-    try:
-        gt_ob = ground_truth[object_box_inds[:,0], object_box_inds[:,1]]
-    except IndexError:
-        return None
-    
-    pred_ob = output[object_box_inds[:,0], object_box_inds[:,1]]
-
-    cls_scores_pred = pred_ob[:,5:]
-    cls_scores_target = gt_ob[:,5].long()
-    
-    #get centre x and centre y 
-    centre_x = pred_ob[:,0]
-    centre_y = pred_ob[:,1]
-
-    print('gt_ob ', gt_ob[:, :4])
-    print('pred_ob ', pred_ob[:, :4])
-
-    return cls_scores_pred
 
 def bbox_iou(box1, box2):
     """
@@ -87,6 +59,130 @@ def bbox_iou(box1, box2):
     
     return iou
 
+def average_precision(rec, prec, use_07_metric=True):
+    """ ap = voc_ap(rec, prec, [use_07_metric])
+    Compute VOC AP given precision and recall.
+    If use_07_metric is true, uses the
+    VOC 07 11 point method (default:True).
+    """
+    if use_07_metric:
+        # 11 point metric
+        ap = 0.
+        for t in np.arange(0., 1.1, 0.1):
+            if np.sum(rec >= t) == 0:
+                p = 0
+            else:
+                p = np.max(prec[rec >= t])
+            ap = ap + p / 11.
+    else:
+        # correct AP calculation
+        # first append sentinel values at the end
+        mrec = np.concatenate(([0.], rec, [1.]))
+        mpre = np.concatenate(([0.], prec, [0.]))
+
+        # compute the precision envelope
+        for i in range(mpre.size - 1, 0, -1):
+            mpre[i - 1] = np.maximum(mpre[i - 1], mpre[i])
+
+        # to calculate area under PR curve, look for points
+        # where X axis (recall) changes value
+        i = np.where(mrec[1:] != mrec[:-1])[0]
+
+        # and sum (\Delta recall) * prec
+        ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
+    return ap
+
+
+def custom_eval(predictions_all,
+             ground_truths_all,
+             num_gts,
+             ovthresh=0.5):
+    """
+    [ovthresh]: Overlap threshold (default = 0.5)
+    (default True)
+    """
+
+    image_num = len(ground_truths_all)
+    tp = np.zeros(image_num)
+    fp = np.zeros(image_num)
+    for i in range(image_num):
+
+        predictions = predictions_all[i]
+        ground_truths = ground_truths_all[i]
+        # Predictions
+        confidence = predictions[:, 5]
+        BB = predictions[:, :4]
+
+        # sort by confidence
+        sorted_ind = np.argsort(-confidence)
+        sorted_scores = np.sort(-confidence)
+        BB = BB[sorted_ind, :]
+
+        # go down dets and mark TPs and FPs
+        nd = BB.shape[0]
+        tp_i = np.zeros(nd)
+        fp_i = np.zeros(nd)
+        BBGT = ground_truths
+        for d in range(nd):
+            bb = BB[d]
+            ovmax = -np.inf
+            # compute overlaps
+            # intersection
+            ixmin = np.maximum(BBGT[:, 0], bb[0])
+            iymin = np.maximum(BBGT[:, 1], bb[1])
+            ixmax = np.minimum(BBGT[:, 2], bb[2])
+            iymax = np.minimum(BBGT[:, 3], bb[3])
+            iw = np.maximum(ixmax - ixmin, 0.)
+            ih = np.maximum(iymax - iymin, 0.)
+            inters = iw * ih
+            uni = ((bb[2] - bb[0]) * (bb[3] - bb[1]) +
+                    (BBGT[:, 2] - BBGT[:, 0]) *
+                    (BBGT[:, 3] - BBGT[:, 1]) - inters)
+            overlaps = inters / uni
+            ovmax = np.max(overlaps)
+            jmax = np.argmax(overlaps)
+
+            if ovmax > ovthresh:
+                tp_i[d] = 1.
+                print('TP!')
+            else:
+                fp_i[d] = 1.
+        fp_i = sum(fp_i)
+        tp_i = sum(tp_i)
+        fp[i] = fp_i
+        tp[i] = tp_i
+
+    # compute precision recall
+    fp = np.cumsum(fp)
+    tp = np.cumsum(tp)
+    print('fp {}, tp {}'.format(fp, tp))
+    rec = tp / float(num_gts)
+    # avoid divide by zero in case the first detection matches a difficult
+    # ground truth
+    prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
+    ap = average_precision(rec, prec)
+
+    return ap
+
+    # return rec, prec, ap
+
+def corner_to_center_1d(box):
+    box[0] = (box[0] + box[2])/2
+    
+    box[1] = (box[1] + box[3])/2
+    box[2] = 2*(box[2] - box[0])
+    box[3] = 2*(box[3] - box[1])
+
+    return box
+
+def center_to_corner_2d(boxes):
+    boxes[:,0] = (boxes[:,0] - boxes[:,2]/2)
+    boxes[:,1] = (boxes[:,1] - boxes[:,3]/2)
+    boxes[:,2] = (boxes[:,2] + boxes[:,0]) 
+    boxes[:,3] = (boxes[:,3] + boxes[:,1])
+    
+    return boxes
+
 if __name__ == "__main__":
     args = arg_parse()
 
@@ -108,26 +204,45 @@ if __name__ == "__main__":
 
     model = model.to(device)  ## Really? You're gonna eval on the CPU?
 
-    # Load test data
+    # Load test data and only resize
     transforms = Sequence([YoloResize(inp_dim)])
     test_data = CustomDataset(root="data", ann_file="data/test.txt", det_transforms=transforms)
-    data_loader = DataLoader(test_data, batch_size=1)
 
-    mAP = []
-    scores = []
+    ground_truths_all = []
+    predictions_all = []
+    num_gts = 0
 
-    for image, ground_truth in data_loader:
-        with torch.no_grad():
-            image = image.to(device)
-            ground_truth = ground_truth.to(device)
-            output = model(image)
-            score = output.unsqueeze(dim=1)[-1][-1][-1][5]
-        scores.append(float(score.detach().cpu().numpy()))
-    
-    print('average class scores: {}'.format(np.mean(scores)))
+    for i in range(len(test_data)):
+        img_file = test_data.examples[i]
+        print(img_file)
+
+        # Read image and prepare for input to network
+        img, orig_im, orig_im_dim = prep_image(plt.imread(img_file.rstrip()), inp_dim)
+        im_dim = torch.FloatTensor(orig_im_dim).to(device)
+
+        # Read ground truth labels
+        ground_truths = np.array(pd.read_csv(img_file.replace(img_file.split('.')[-1], 'txt'),
+            header=None, sep=' '))
+        ground_truths[:, 1:] = center_to_corner_2d(ground_truths[:, 1:] * orig_im_dim[0])
+        class_labels = ground_truths[:, 0]
+        ground_truths = ground_truths[:, 1:]
+        num_gts += ground_truths.shape[0]
+
+        # img = image[np.newaxis, :, :, :]
+        output = model(img)
+        output = write_results(output, 0.7, num_classes, nms=True)
         
+        if type(output) != int:
+            output = de_letter_box(output, im_dim, inp_dim)
+            # Get x1y1x2y2, mask conf, class conf
+            output = np.asarray(output)[:, 1:7]
+            # Remember original image is square (or should be)
+            output[:,0:4] = (output[:,0:4] / inp_dim) * orig_im_dim[0]
+            print(ground_truths)
+            print(output)
 
-    
+            ground_truths_all.append(ground_truths)
+            predictions_all.append(output)
 
-
-
+    aps = custom_eval(predictions_all, ground_truths_all, num_gts=num_gts, ovthresh=0.2)
+    print(np.mean(aps))

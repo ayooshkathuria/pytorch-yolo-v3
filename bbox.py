@@ -16,9 +16,7 @@ def confidence_filter(result, confidence):
 
 def confidence_filter_cls(result, confidence):
     max_scores = torch.max(result[:,:,5:25], 2)[0]
-    res = torch.cat((result, max_scores),2)
-    print(res.shape)
-    
+    res = torch.cat((result, max_scores),2)    
     
     cond_1 = (res[:,:,4] > confidence).float()
     cond_2 = (res[:,:,25] > 0.995).float()
@@ -107,9 +105,6 @@ def bbox_iou(box1, box2, lib = "torch"):
     b2_area = (b2_x2 - b2_x1 + 1)*(b2_y2 - b2_y1 + 1)
     
     iou = inter_area / (b1_area + b2_area - inter_area)
-    
-    return iou
-
 
     return iou
 
