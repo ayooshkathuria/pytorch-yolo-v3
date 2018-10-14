@@ -287,15 +287,14 @@ def create_modules(blocks):
 
 
 class Darknet(nn.Module):
-    def __init__(self, cfgfile):
+    def __init__(self, cfgfile, train=True):
         super(Darknet, self).__init__()
         self.blocks = parse_cfg(cfgfile)
         self.net_info, self.module_list = create_modules(self.blocks)
         self.header = torch.IntTensor([0,0,0,0])
         self.seen = 0
+        self.training = train
 
-        
-        
     def get_blocks(self):
         return self.blocks
     
@@ -398,7 +397,7 @@ class Darknet(nn.Module):
                 if not self.training:
                     x = x.data
                 
-                x = predict_transform(x, inp_dim, anchors, num_classes, train = self.training)
+                x = predict_transform(x, inp_dim, anchors, num_classes, train=self.training)
                 
                 if type(x) == int:
                     continue

@@ -3,14 +3,16 @@ Training script for PyTorch Darknet model.
 
 e.g. python train.py --cfg cfg/yolov3-tiny-1xclass.cfg --weights yolov3-tiny.weights --datacfg data/obj.data
 
+Output prediction vector is [centre_x, centre_y, box_height, box_width, mask_confidence, class_confidence]
+
 """
 
 import torch
 import os
 import argparse
-from darknet import *
+from darknet import Darknet, parse_cfg
 from util import *
-from data_aug.data_aug import *
+from data_aug.data_aug import Sequence
 from preprocess import *
 import numpy as np
 import cv2
@@ -18,9 +20,8 @@ import pickle as pkl
 import matplotlib.pyplot as plt
 from bbox import bbox_iou, corner_to_center, center_to_corner
 import pickle 
-from customloader import *
+from customloader import transforms, CustomDataset
 import torch.optim as optim
-random.seed(0)
 import torch.autograd.gradcheck
 from tensorboardX import SummaryWriter
 import sys 
@@ -49,9 +50,8 @@ def arg_parse():
                         "weightsfile",
                         default = "yolov3.weights", type = str)
     parser.add_argument("--datacfg", dest = "datafile", help = "cfg file containing the configuration for the dataset",
-                        type = str, default = "cfg/coco.data")
+                        type = str, default = "cfg/data.data")
     parser.add_argument("--lr", dest = "lr", type = float, default = 0.001)
-    parser.add_argument("--bs", dest = "bs", type = int, default = 1)
     parser.add_argument("--mom", dest = "mom", type = float, default = 0)
     parser.add_argument("--wd", dest = "wd", type = float, default = 0)
 
@@ -60,12 +60,10 @@ def arg_parse():
 
 args = arg_parse()
 
-# args.weightsfile = "darknet53.conv.74"
 #Load the model
-model = Darknet(args.cfgfile).to(device)
+model = Darknet(args.cfgfile, train=True)
 model.load_weights(args.weightsfile, stop = 18)
 model.train()
-#assert False
 model = model.to(device)  ## Really? You're gonna train on the CPU?
 
 # Load the config file
@@ -94,26 +92,27 @@ policy = net_options['policy']
 steps = net_options['steps']
 scales = net_options['scales']
 num_classes = net_options['classes']
+bs = net_options['batch']
+# Assume h == w
+inp_dim = net_options['height']
 
 # Assign from the command line args
 lr = args.lr
 wd = args.wd
-bs = args.bs
 momentum = args.mom
 momentum = 0.9
 wd = 0.0005
 
 
-inp_dim = 416
+inp_dim = int(inp_dim)
 num_classes = int(num_classes)
+bs = int(bs)
 transforms = Sequence([YoloResize(inp_dim)])
 
-coco = CocoDataset(root = "data", annFile="data/train.txt", det_transforms = transforms)
+data = CustomDataset(root = "data", ann_file="data/train.txt", det_transforms = transforms)
 
-coco_loader = DataLoader(coco, batch_size = bs)
+data_loader = DataLoader(data, batch_size = bs)
 optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay = wd)
-
-
 
 def logloss(pred, target):
     assert pred.shape == target.shape, "Input and target must be the same shape"
@@ -220,29 +219,15 @@ def YOLO_loss(ground_truth, output):
 
 
     #class_loss 
-    cls_scores_pred = pred_ob[:,5:]
-    
-    
-    cls_scores_target = gt_ob[:,5].long()
-    
-    
-    
-    
-    
-    
-    cls_scores_pred = torch.log(torch.sigmoid(cls_scores_pred))
-    
-#    print(cls_scores_pred.shape)
-#    print(cls_scores_target.shape)
-#    cls_loss = torch.nn.NLLLoss(size_average=False, reduce = False)(cls_scores_pred, cls_scores_target)
-        
-    cls_loss = 0
-    
+    # cls_scores_pred = pred_ob[:,5:]
+    # cls_scores_target = gt_ob[:,5].long() 
+    # cls_scores_pred = torch.log(torch.sigmoid(cls_scores_pred))
+    # print(cls_scores_pred.shape)
+    # print(cls_scores_target.shape)
+    # cls_loss = torch.nn.NLLLoss(size_average=False, reduce = False)(cls_scores_pred, cls_scores_target)
+
     cls_labels = torch.zeros(gt_ob.shape[0], num_classes).to(device)
-    
     cls_labels[torch.arange(gt_ob.shape[0]).long(), gt_ob[:,5].long()] = 1
-    
-    
     cls_loss = 0    
     
     for c_n in range(num_classes):
@@ -251,39 +236,29 @@ def YOLO_loss(ground_truth, output):
         targ_labels = targ_labels.repeat(1,2)
         targ_labels[:,0] = 1 - targ_labels[:,0]
         cls_loss += torch.nn.CrossEntropyLoss(size_average=False)(targ_labels, cls_labels[:,c_n].long())
-        
-    
-    
-    
+
     print(cls_loss)
     total_loss += cls_loss
-    
-    
-    
-    
+
     return total_loss
-    
 
-    
-    
-    #get the centerx, and centre y
-    
-    
-
-    
-    
 itern = 0
+for image, ground_truth in data_loader:
+
+    # # Track gradients in backprop
+    # image = torch.tensor(image, requires_grad=True).to(device)
+    # ground_truth = torch.tensor(ground_truth, requires_grad=True).to(device)
+    # with torch.no_grad():
+    image = image.to(device)
+    ground_truth = ground_truth.to(device)
     
-for batch in coco_loader:
-    batch[0] = batch[0].to(device)
-    batch[1] = batch[1].to(device)
-    
-    output = model(batch[0])
-    ground_truth= batch[1]
+    output = model(image)
+
+    # Clear gradients from optimizer for next iteration
+    optimizer.zero_grad()
 
     print('Iteration ', itern)    
-        
-    
+
     print("\n\n")
     if (torch.isnan(ground_truth).any()):
         print("Nans in Ground_truth")
@@ -305,17 +280,14 @@ for batch in coco_loader:
     loss  = YOLO_loss(ground_truth, output)
     
     for param_group in optimizer.param_groups:
-        if itern < 2000:
+        if itern < 0.8 * len(data_loader):
             param_group["lr"] = (lr*pow((itern / 2000),4))
             
-        param_group["lr"] /= args.bs
-            
-        
-            
+        param_group["lr"] /= bs
     
     print(optimizer.param_groups[0]["lr"])
     if loss:
-        print("Loss for iter no: {}: {}".format(itern, float(loss)/args.bs))
+        print("Loss for iter no: {}: {}".format(itern, float(loss)/bs))
         writer.add_scalar("Loss/vanilla", float(loss), itern)
         loss.backward()
         optimizer.step()
@@ -326,7 +298,7 @@ for batch in coco_loader:
 writer.close()
 
 # Save final model in pytorch format (the state dictionary only, i.e. parameters only)
-torch.save(model.state_dict(), os.path.join('runs', 'epoch{}-bs{}-loss{}.weights'.format(itern, bs, loss)))
+torch.save(model.state_dict(), os.path.join('runs', 'epoch{}-bs{}-loss{}.weights'.format(itern, bs, loss.data)))
     
     
 

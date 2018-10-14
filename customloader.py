@@ -17,14 +17,16 @@ import os
 inp_dim = 416
 
 # Custom transform options
-# transforms = Sequence([ RandomHSV(), RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10),  RandomShear(), YoloResize(inp_dim)])
-transforms = Sequence([YoloResize(inp_dim)])
+transforms = Sequence([ RandomHSV(), RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10),  RandomShear(), YoloResize(inp_dim)])
+# transforms = Sequence([YoloResize(inp_dim)])
 
 random.seed(0)
 
 #from kmeans.kmeans import *
 
 def transform_annotation(x, image):
+    """Convert the annotation/target boxes to a format understood by
+    dataset class"""
     #convert the PIL image to a numpy array
     boxes = np.array([a.rstrip().split(' ') for a in x], dtype='float32')
     
@@ -39,20 +41,15 @@ def transform_annotation(x, image):
     return image, ground_truth
 
 
-class CocoDataset(CocoDetection):
-    def __init__(self, root = None, annFile = None, det_transforms = None):
-        """Note:  When using VoTT, annFile is a list to paths of images"""
+class CustomDataset(CocoDetection):
+    def __init__(self, root = None, ann_file = None, det_transforms = None):
+        """Note:  When using VoTT and exported to YOLO, 
+        ann_file is a list to paths of images"""
 #        super().__init__(root, annFile, None, None)
         self.root = root
-#        self.ids = list(self.coco.imgs.keys())
-        #self.root = root 
-        #self.annFile = pkl.load(open(".pkl", "rb"))
-        #self.ids = list(self.annFile.keys())
-
-        # self.annFile = pkl.load(open(annFile, "rb"))
         
         self.examples = None
-        with open(annFile, 'r') as f:
+        with open(ann_file, 'r') as f:
             self.examples = f.readlines()
         self.det_transforms = det_transforms
 
@@ -175,16 +172,12 @@ class CocoDataset(CocoDetection):
         
         ground_truth_boxes = ground_truth_boxes[:,:,np.newaxis]
         
-        candidate_ious = bbox_iou(candidate_boxes, ground_truth_boxes, lib = "numpy")
+        candidate_ious = bbox_iou(candidate_boxes, ground_truth_boxes, lib="numpy")
         
         
         
-        prediction_boxes = np.zeros((num_ground_truth_in_im,1), dtype = np.int)
+        prediction_boxes = np.zeros((num_ground_truth_in_im,1), dtype=np.int)
 
-#        print(inds)
-#        print(candidate_ious)
-#        print(label_map[[252,253,254]])
-#        assert False
         for i in range(num_ground_truth_in_im):
             #get the the row and the column of the highest IoU
             max_iou_ind = np.argmax(candidate_ious)
@@ -438,49 +431,3 @@ def get_num_boxes(cocoloader):
         num_boxes += bbox_dims.shape[0]
     
     return num_boxes
-
-
-
-
-    
-
-
-
-def pickle_coco_dims(cocoloader):
-    li = []
-    
-    
-    i = 0
-    for x in cocoloader:
-        x = trasform_annotation(x)
-        bboxes = x[1]
-        bbox_dims_h = bboxes[:,3] - bboxes[:,1]
-        bbox_dims_w = bboxes[:,2] - bboxes[:,0]
-        
-    
-        bbox_dims = np.stack((bbox_dims_w, bbox_dims_h)).T
-        
-        li.append(bbox_dims)        
-        
-        print('Image {} of {}'.format(i, len(cocoloader)))
-        
-        i += 1
-        
-    li = np.vstack(li)
-    pkl.dump(li, open("Entire_dims.pkl", "wb"))
-
-
-
-def get_coco_sample(cocoloader):
-    li = []
-    i = 0
-    for x in cocoloader:    
-        if i == 9:
-            break
-        i+= 1
-        li.append(x)
-    pkl.dump(li, open("Coco_sample.pkl", "wb"))
-    
-        
-
-

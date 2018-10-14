@@ -94,7 +94,7 @@ if __name__ == '__main__':
     
     
     print("Loading network.....")
-    model = Darknet(args.cfgfile)
+    model = Darknet(cfgfile=args.cfgfile, train=False)
     model.load_state_dict(torch.load(args.weightsfile))
     print("Network successfully loaded")
 
@@ -134,7 +134,7 @@ if __name__ == '__main__':
             img = img.to(device)
             
             with torch.no_grad():   
-                output = model(Variable(img))
+                output = model(img)
             output = write_results(output, confidence, num_classes, nms = True, nms_conf = nms_thesh)
 
             if type(output) == int:
@@ -150,18 +150,6 @@ if __name__ == '__main__':
 
             
             output = de_letter_box(output, im_dim, inp_dim)
-#            im_dim = im_dim.repeat(output.size(0), 1)
-#            scaling_factor = torch.min(inp_dim/im_dim,1)[0].view(-1,1)
-#            
-#            output[:,[1,3]] -= (inp_dim - scaling_factor*im_dim[:,0].view(-1,1))/2
-#            output[:,[2,4]] -= (inp_dim - scaling_factor*im_dim[:,1].view(-1,1))/2
-#            
-#            output[:,1:5] /= scaling_factor
-#    
-#            for i in range(output.shape[0]):
-#                output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, im_dim[i,0])
-#                output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, im_dim[i,1])
-            
             classes = load_classes(args.datafile)
             colors = pkl.load(open("pallete", "rb"))
             

@@ -1,8 +1,10 @@
-# A Fork of PyTorch Implemation of YOLOv3 for Custom Data
+# A Fork of PyTorch Implemation of YOLOv3 to Accomodate Custom Data
 
 _We love you COCO, but we have our own interests now._
 
 This project is a "You Only Look Once" v3 sample using PyTorch, a fork of https://github.com/ayooshkathuria/pytorch-yolo-v3, with updates and improvements specifically for the Tiny architecture on custom data labeled with VoTT (versus the classic download of VOC or COCO data and labels).  This fork allows the user to create their own dataset.
+
+<img src="imgs/id_plumeria_sml.png" width="70%" align="center">
 
 Note:  This project is a work in progress and is based upon a research effort.
 
@@ -34,7 +36,7 @@ Here, you will use your trained model in a live video feed.  Ensure the `yolov3-
 
 Cmd:
 
-    python video_demo.py --cfg cfg/yolov3-tiny.cfg --weights runs/<your trained model>.weights --datacfg data/obj.data
+    python video_demo.py --cfg cfg/yolov3-tiny.cfg --weights runs/<your trained model>.weights --datacfg data/obj.data --confidence 0.6
 
 Usage:
     

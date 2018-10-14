@@ -25,7 +25,14 @@ def convert2cpu(matrix):
     else:
         return matrix
 
-def predict_transform(prediction, inp_dim, anchors, num_classes, train = False):
+def predict_transform(prediction, inp_dim, anchors, num_classes, train=False):
+    """
+    Arguments
+    ---------
+    Input prediction vector is:
+      [centre_x, centre_y, box_height, box_width, mask_confidence, class_confidence]
+    """
+
     batch_size = prediction.size(0)
     stride =  inp_dim // prediction.size(2)
     grid_size = inp_dim // stride
@@ -48,34 +55,23 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, train = False):
     prediction[:,:,1] = torch.sigmoid(prediction[:,:,1])
     prediction[:,:,4] = torch.sigmoid(prediction[:,:,4])
     
-
-    
     #Add the center offsets
     grid_len = np.arange(grid_size)
     a,b = np.meshgrid(grid_len, grid_len)
-    
     x_offset = torch.FloatTensor(a).view(-1,1).to(device)
     y_offset = torch.FloatTensor(b).view(-1,1).to(device)
-    
-
-    
     x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,num_anchors).view(-1,2).unsqueeze(0)
-    
     prediction[:,:,:2] += x_y_offset
       
     #log space transform height and the width
     anchors = torch.FloatTensor(anchors).to(device)
-
-    
     anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
     prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
 
     #Softmax the class scores
     prediction[:,:,5: 5 + num_classes] = torch.sigmoid((prediction[:,:, 5 : 5 + num_classes]))
-
     prediction[:,:,:4] *= stride
-   
-    
+
     return prediction
 
 def load_classes(namesfile):
@@ -421,4 +417,31 @@ def torch_meshgrid(x, y):
     y = y.repeat(y.shape[0],1)
     meshed = torch.cat([y.unsqueeze_(2),x.unsqueeze_(2)], 2)
     return meshed
+
+def bbox_iou(box1, box2):
+    """
+    Returns the IoU of two bounding boxes 
+
+    Input boxes are expected to be in x1y1x2y2 format.
+    """
+    #Get the coordinates of bounding boxes
+    b1_x1, b1_y1, b1_x2, b1_y2 = box1[:,0], box1[:,1], box1[:,2], box1[:,3]
+    b2_x1, b2_y1, b2_x2, b2_y2 = box2[:,0], box2[:,1], box2[:,2], box2[:,3]
+    
+    #get the corrdinates of the intersection rectangle
+    inter_rect_x1 =  torch.max(b1_x1, b2_x1)
+    inter_rect_y1 =  torch.max(b1_y1, b2_y1)
+    inter_rect_x2 =  torch.min(b1_x2, b2_x2)
+    inter_rect_y2 =  torch.min(b1_y2, b2_y2)
+    
+    #Intersection area
+    inter_area = torch.clamp(inter_rect_x2 - inter_rect_x1 + 1, min=0) * torch.clamp(inter_rect_y2 - inter_rect_y1 + 1, min=0)
+
+    #Union Area
+    b1_area = (b1_x2 - b1_x1 + 1)*(b1_y2 - b1_y1 + 1)
+    b2_area = (b2_x2 - b2_x1 + 1)*(b2_y2 - b2_y1 + 1)
+    
+    iou = inter_area / (b1_area + b2_area - inter_area)
+    
+    return iou
     
