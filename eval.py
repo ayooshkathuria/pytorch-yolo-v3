@@ -6,7 +6,7 @@ import random
 from customloader import CustomDataset, YoloResize
 from torch.utils.data import DataLoader
 from data_aug.data_aug import Sequence
-from bbox import bbox_iou
+# from bbox import bbox_iou
 from util import write_results, de_letter_box
 from live import prep_image
 import numpy as np
@@ -99,7 +99,6 @@ def custom_eval(predictions_all,
              ovthresh=0.5):
     """
     [ovthresh]: Overlap threshold (default = 0.5)
-    (default True)
     """
 
     image_num = len(ground_truths_all)
@@ -113,58 +112,40 @@ def custom_eval(predictions_all,
         confidence = predictions[:, 5]
         BB = predictions[:, :4]
 
-        # sort by confidence
+        # Sort by confidence
         sorted_ind = np.argsort(-confidence)
         sorted_scores = np.sort(-confidence)
         BB = BB[sorted_ind, :]
 
-        # go down dets and mark TPs and FPs
+        BBGT = ground_truths[:, :4]
         nd = BB.shape[0]
-        tp_i = np.zeros(nd)
-        fp_i = np.zeros(nd)
-        BBGT = ground_truths
+        ngt = BBGT.shape[0]
+        
+        # Go down detections and ground truths and calc overlaps (IOUs)
+        overlaps = []
         for d in range(nd):
             bb = BB[d]
-            ovmax = -np.inf
-            # compute overlaps
-            # intersection
-            ixmin = np.maximum(BBGT[:, 0], bb[0])
-            iymin = np.maximum(BBGT[:, 1], bb[1])
-            ixmax = np.minimum(BBGT[:, 2], bb[2])
-            iymax = np.minimum(BBGT[:, 3], bb[3])
-            iw = np.maximum(ixmax - ixmin, 0.)
-            ih = np.maximum(iymax - iymin, 0.)
-            inters = iw * ih
-            uni = ((bb[2] - bb[0]) * (bb[3] - bb[1]) +
-                    (BBGT[:, 2] - BBGT[:, 0]) *
-                    (BBGT[:, 3] - BBGT[:, 1]) - inters)
-            overlaps = inters / uni
-            ovmax = np.max(overlaps)
-            jmax = np.argmax(overlaps)
+            for gt in range(ngt):
+                bbox1 = torch.tensor(BBGT[np.newaxis, gt, :], dtype=torch.float)
+                bbox2 = torch.tensor(bb[np.newaxis, :], dtype=torch.float)
+                overlaps.append(bbox_iou(bbox1, bbox2))
+        ovmax = np.max(np.array(overlaps))
 
-            if ovmax > ovthresh:
-                tp_i[d] = 1.
-                print('TP!')
-            else:
-                fp_i[d] = 1.
-        fp_i = sum(fp_i)
-        tp_i = sum(tp_i)
-        fp[i] = fp_i
-        tp[i] = tp_i
+        # Mark TPs and FPs
+        if ovmax > ovthresh:
+            tp[i] = 1.
+        else:
+            fp[i] = 1.
 
-    # compute precision recall
+    # Compute precision recall
     fp = np.cumsum(fp)
     tp = np.cumsum(tp)
-    print('fp {}, tp {}'.format(fp, tp))
     rec = tp / float(num_gts)
-    # avoid divide by zero in case the first detection matches a difficult
-    # ground truth
+    # Avoid divide by zero
     prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
     ap = average_precision(rec, prec)
 
-    return ap
-
-    # return rec, prec, ap
+    return rec, prec, ap
 
 def corner_to_center_1d(box):
     box[0] = (box[0] + box[2])/2
@@ -202,9 +183,9 @@ if __name__ == "__main__":
     # Set to evaluation (don't accumulate gradients)
     model.eval()
 
-    model = model.to(device)  ## Really? You're gonna eval on the CPU?
+    model = model.to(device)  ## Really? You're gonna eval on the CPU? :)
 
-    # Load test data and only resize
+    # Load test data and resize only
     transforms = Sequence([YoloResize(inp_dim)])
     test_data = CustomDataset(root="data", ann_file="data/test.txt", det_transforms=transforms)
 
@@ -238,11 +219,9 @@ if __name__ == "__main__":
             output = np.asarray(output)[:, 1:7]
             # Remember original image is square (or should be)
             output[:,0:4] = (output[:,0:4] / inp_dim) * orig_im_dim[0]
-            print(ground_truths)
-            print(output)
 
             ground_truths_all.append(ground_truths)
             predictions_all.append(output)
 
-    aps = custom_eval(predictions_all, ground_truths_all, num_gts=num_gts, ovthresh=0.2)
+    prec, rec, aps = custom_eval(predictions_all, ground_truths_all, num_gts=num_gts, ovthresh=0.2)
     print(np.mean(aps))
