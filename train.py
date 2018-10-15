@@ -54,7 +54,7 @@ def arg_parse():
     parser.add_argument("--lr", dest = "lr", type = float, default = 0.001)
     parser.add_argument("--mom", dest = "mom", type = float, default = 0)
     parser.add_argument("--wd", dest = "wd", type = float, default = 0)
-    parser.add_argument("--unfreeze", dest = "unfreeze", type = int, default = 2,
+    parser.add_argument("--unfreeze", dest = "unfreeze", type = int, default = 4,
                         help="Last number of layers to unfreeze for training")
 
 
@@ -65,14 +65,18 @@ args = arg_parse()
 
 #Load the model
 model = Darknet(args.cfgfile, train=True)
-model.load_weights(args.weightsfile)
 
-# Freeze all weights before layer "stop_layer" from "unfreeze" argument
+
 # "unfreeze" refers to the last number of layers to tune (allow gradients to be tracked)
 p_i = 1
 p_len = len(list(model.parameters()))
 unfreeze = args.unfreeze
 stop_layer = p_len - unfreeze
+
+model.load_weights(args.weightsfile, stop=stop_layer)
+
+# Freeze all weights before layer "stop_layer" from "unfreeze" argument
+print('p_len ', p_len)
 for p in model.parameters():
     if p_i < stop_layer:
         p.requires_grad = False
@@ -81,11 +85,10 @@ for p in model.parameters():
     p_i += 1
 
 model.train()
-model = model.to(device)  ## Really? You're gonna train on the CPU?
+model = model.to(device)
 
 # Load the config file
 net_options =  model.net_info
-# print(net_options)
 
 ##Parse the config file
 batch = net_options['batch']
