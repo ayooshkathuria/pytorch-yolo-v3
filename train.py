@@ -54,6 +54,9 @@ def arg_parse():
     parser.add_argument("--lr", dest = "lr", type = float, default = 0.001)
     parser.add_argument("--mom", dest = "mom", type = float, default = 0)
     parser.add_argument("--wd", dest = "wd", type = float, default = 0)
+    parser.add_argument("--unfreeze", dest = "unfreeze", type = int, default = 2,
+                        help="Last number of layers to unfreeze for training")
+
 
     return parser.parse_args()
 
@@ -62,7 +65,21 @@ args = arg_parse()
 
 #Load the model
 model = Darknet(args.cfgfile, train=True)
-model.load_weights(args.weightsfile, stop = 18)
+model.load_weights(args.weightsfile)
+
+# Freeze all weights before layer "stop_layer" from "unfreeze" argument
+# "unfreeze" refers to the last number of layers to tune (allow gradients to be tracked)
+p_i = 1
+p_len = len(list(model.parameters()))
+unfreeze = args.unfreeze
+stop_layer = p_len - unfreeze
+for p in model.parameters():
+    if p_i < stop_layer:
+        p.requires_grad = False
+    if p_i == stop_layer:
+        break
+    p_i += 1
+
 model.train()
 model = model.to(device)  ## Really? You're gonna train on the CPU?
 
@@ -243,6 +260,8 @@ def YOLO_loss(ground_truth, output):
     return total_loss
 
 itern = 0
+epochs = int(len(data) / bs)
+unfreeze_step = 0.8 * len(data)
 for image, ground_truth in data_loader:
 
     # # Track gradients in backprop
@@ -257,7 +276,7 @@ for image, ground_truth in data_loader:
     # Clear gradients from optimizer for next iteration
     optimizer.zero_grad()
 
-    print('Iteration ', itern)    
+    print('Iteration ', itern)
 
     print("\n\n")
     if (torch.isnan(ground_truth).any()):
@@ -280,12 +299,12 @@ for image, ground_truth in data_loader:
     loss  = YOLO_loss(ground_truth, output)
     
     for param_group in optimizer.param_groups:
-        if itern < 0.8 * len(data_loader):
-            param_group["lr"] = (lr*pow((itern / 2000),4))
-            
-        param_group["lr"] /= bs
+        if itern >= unfreeze_step:
+            param_group["lr"] = (lr*pow((itern / unfreeze_step),4))
+
+        # param_group["lr"] /= bs
     
-    print(optimizer.param_groups[0]["lr"])
+    print('lr: ', optimizer.param_groups[0]["lr"])
     if loss:
         print("Loss for iter no: {}: {}".format(itern, float(loss)/bs))
         writer.add_scalar("Loss/vanilla", float(loss), itern)
@@ -298,7 +317,7 @@ for image, ground_truth in data_loader:
 writer.close()
 
 # Save final model in pytorch format (the state dictionary only, i.e. parameters only)
-torch.save(model.state_dict(), os.path.join('runs', 'epoch{}-bs{}-loss{}.weights'.format(itern, bs, loss.data)))
+torch.save(model.state_dict(), os.path.join('runs', 'epoch{}-bs{}-loss{}.pth'.format(itern, bs, float(loss)/bs)))
     
     
 
