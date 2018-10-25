@@ -1,6 +1,10 @@
-torch==0.4.1
 pandas==0.23.4
 numpy==1.15.2
 pycocotools==2.0.0
 tensorboardX==1.4
+cython==0.29
 opencv-python==3.4.3.18
+matplotlib==3.0.0
+torchvision==0.2.1
+torch==1.0.0.dev20181018
+matplotlib==3.0.0

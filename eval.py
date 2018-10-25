@@ -32,6 +32,75 @@ def arg_parse():
 
     return parser.parse_args()
 
+# Original author: Francisco Massa:
+# https://github.com/fmassa/object-detection.torch
+# Ported to PyTorch by Max deGroot (02/01/2017)
+def nms(boxes, scores, overlap=0.5, top_k=200):
+    """Apply non-maximum suppression at test time to avoid detecting too many
+    overlapping bounding boxes for a given object.
+    Args:
+        boxes: (tensor) The location preds for the img, Shape: [num_priors,4].
+        scores: (tensor) The class predscores for the img, Shape:[num_priors].
+        overlap: (float) The overlap thresh for suppressing unnecessary boxes.
+        top_k: (int) The Maximum number of box preds to consider.
+    Return:
+        The indices of the kept boxes with respect to num_priors.
+    """
+
+    keep = scores.new(scores.size(0)).zero_().long()
+    if boxes.numel() == 0:
+        return keep, 0
+    x1 = boxes[:, 0]
+    y1 = boxes[:, 1]
+    x2 = boxes[:, 2]
+    y2 = boxes[:, 3]
+    area = torch.mul(x2 - x1, y2 - y1)
+    v, idx = scores.sort(0)  # sort in ascending order
+    # I = I[v >= 0.01]
+    idx = idx[-top_k:]  # indices of the top-k largest vals
+    xx1 = boxes.new()
+    yy1 = boxes.new()
+    xx2 = boxes.new()
+    yy2 = boxes.new()
+    w = boxes.new()
+    h = boxes.new()
+
+    # keep = torch.Tensor()
+    count = 0
+    while idx.numel() > 0:
+        i = idx[-1]  # index of current largest val
+        # keep.append(i)
+        keep[count] = i
+        count += 1
+        if idx.size(0) == 1:
+            break
+        idx = idx[:-1]  # remove kept element from view
+        # load bboxes of next highest vals
+        torch.index_select(x1, 0, idx, out=xx1)
+        torch.index_select(y1, 0, idx, out=yy1)
+        torch.index_select(x2, 0, idx, out=xx2)
+        torch.index_select(y2, 0, idx, out=yy2)
+        # store element-wise max with next highest score
+        xx1 = torch.clamp(xx1, min=x1[i])
+        yy1 = torch.clamp(yy1, min=y1[i])
+        xx2 = torch.clamp(xx2, max=x2[i])
+        yy2 = torch.clamp(yy2, max=y2[i])
+        w.resize_as_(xx2)
+        h.resize_as_(yy2)
+        w = xx2 - xx1
+        h = yy2 - yy1
+        # check sizes of xx1 and xx2.. after each iteration
+        w = torch.clamp(w, min=0.0)
+        h = torch.clamp(h, min=0.0)
+        inter = w*h
+        # IoU = i / (area(a) + area(b) - i)
+        rem_areas = torch.index_select(area, 0, idx)  # load remaining areas)
+        union = (rem_areas - inter) + area[i]
+        IoU = inter/union  # store result in iou
+        # keep only elements with an IoU <= overlap
+        idx = idx[IoU.le(overlap)]
+    return keep, count
+
 def bbox_iou(box1, box2):
     """
     Returns the IoU of two bounding boxes 
@@ -59,7 +128,7 @@ def bbox_iou(box1, box2):
     
     return iou
 
-def average_precision(rec, prec, use_07_metric=True):
+def average_precision(rec, prec, use_07_metric=False):
     """ ap = voc_ap(rec, prec, [use_07_metric])
     Compute VOC AP given precision and recall.
     If use_07_metric is true, uses the
@@ -109,7 +178,7 @@ def custom_eval(predictions_all,
         predictions = predictions_all[i]
         ground_truths = ground_truths_all[i]
         # Predictions
-        confidence = predictions[:, 5]
+        confidence = predictions[:, 4]
         BB = predictions[:, :4]
 
         # Sort by confidence
@@ -120,6 +189,9 @@ def custom_eval(predictions_all,
         BBGT = ground_truths[:, :4]
         nd = BB.shape[0]
         ngt = BBGT.shape[0]
+
+        # print(BB)
+        # print(BBGT)
         
         # Go down detections and ground truths and calc overlaps (IOUs)
         overlaps = []
@@ -188,14 +260,16 @@ if __name__ == "__main__":
     # Load test data and resize only
     transforms = Sequence([YoloResize(inp_dim)])
     test_data = CustomDataset(root="data", ann_file="data/test.txt", det_transforms=transforms)
+    test_loader = DataLoader(test_data, batch_size=1)
 
     ground_truths_all = []
     predictions_all = []
     num_gts = 0
 
+    # for i, (img, target) in enumerate(test_loader):
     for i in range(len(test_data)):
         img_file = test_data.examples[i]
-        print(img_file)
+        print(i)
 
         # Read image and prepare for input to network
         img, orig_im, orig_im_dim = prep_image(plt.imread(img_file.rstrip()), inp_dim)
@@ -206,22 +280,36 @@ if __name__ == "__main__":
             header=None, sep=' '))
         ground_truths[:, 1:] = center_to_corner_2d(ground_truths[:, 1:] * orig_im_dim[0])
         class_labels = ground_truths[:, 0]
+        # x1y1x2y2
         ground_truths = ground_truths[:, 1:]
         num_gts += ground_truths.shape[0]
 
-        # img = image[np.newaxis, :, :, :]
-        output = model(img)
-        output = write_results(output, 0.7, num_classes, nms=True)
-        
-        if type(output) != int:
-            output = de_letter_box(output, im_dim, inp_dim)
-            # Get x1y1x2y2, mask conf, class conf
-            output = np.asarray(output)[:, 1:7]
-            # Remember original image is square (or should be)
-            output[:,0:4] = (output[:,0:4] / inp_dim) * orig_im_dim[0]
+    #     # img = image[np.newaxis, :, :, :]
 
-            ground_truths_all.append(ground_truths)
-            predictions_all.append(output)
+
+        img = img.to(device)
+        output = model(img)
+        # output = write_results(output, 0.7, num_classes, nms=True)
+        # output = np.asarray(output)
+        output = output.unsqueeze(0).view(2535, 6)
+        keep = np.unique(np.asarray(nms(output, scores=output[:, 5], overlap=0.8)[0]))
+        print(keep)
+        output = output[keep, :]
+        print(output[0])
+        pred_class = output[:, 0]
+        print(pred_class)
+
+        
+    #     if type(output) != int:
+    #         output = de_letter_box(output, im_dim, inp_dim)
+    #         # Get x1y1x2y2, mask conf, class conf
+        output = output[:, 1:7]
+    #         # Remember original image is square (or should be)
+        # output[:,0:4] = (output[:,0:4] / inp_dim) * orig_im_dim[0]
+        # print(pred_class, output)
+
+        ground_truths_all.append(ground_truths)
+        predictions_all.append(output)
 
     prec, rec, aps = custom_eval(predictions_all, ground_truths_all, num_gts=num_gts, ovthresh=0.2)
-    print(np.mean(aps))
+    print(prec, rec, np.mean(aps))
