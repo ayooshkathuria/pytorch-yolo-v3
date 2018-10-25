@@ -266,13 +266,13 @@ if __name__ == "__main__":
     predictions_all = []
     num_gts = 0
 
-    # for i, (img, target) in enumerate(test_loader):
-    for i in range(len(test_data)):
+    for i, (img, target) in enumerate(test_loader):
+    # for i in range(len(test_data)):
         img_file = test_data.examples[i]
         print(i)
 
         # Read image and prepare for input to network
-        img, orig_im, orig_im_dim = prep_image(plt.imread(img_file.rstrip()), inp_dim)
+        img_tmp, orig_im, orig_im_dim = prep_image(plt.imread(img_file.rstrip()), inp_dim)
         im_dim = torch.FloatTensor(orig_im_dim).to(device)
 
         # Read ground truth labels
@@ -284,32 +284,30 @@ if __name__ == "__main__":
         ground_truths = ground_truths[:, 1:]
         num_gts += ground_truths.shape[0]
 
-    #     # img = image[np.newaxis, :, :, :]
-
-
+        target = target[:, 0, :]
+        target = np.asarray(target[1:])
+        
         img = img.to(device)
         output = model(img)
-        # output = write_results(output, 0.7, num_classes, nms=True)
-        # output = np.asarray(output)
         output = output.unsqueeze(0).view(2535, 6)
         keep = np.unique(np.asarray(nms(output, scores=output[:, 5], overlap=0.8)[0]))
-        print(keep)
         output = output[keep, :]
-        print(output[0])
-        pred_class = output[:, 0]
-        print(pred_class)
+        score_box = output[:, 5]
 
+        # inp_dim is model input size, im_dim is actual image size
+
+        output = np.asarray(output.squeeze(0))
         
-    #     if type(output) != int:
-    #         output = de_letter_box(output, im_dim, inp_dim)
-    #         # Get x1y1x2y2, mask conf, class conf
-        output = output[:, 1:7]
-    #         # Remember original image is square (or should be)
-        # output[:,0:4] = (output[:,0:4] / inp_dim) * orig_im_dim[0]
-        # print(pred_class, output)
+        if output.shape[0] > 0:
+            # Get x1y1x2y2, mask conf, class conf
+            # Remember original image is square (or should be)
+            im_h = im_dim.cpu().numpy()[0]
+            # output[:,0:4] = (output[:,0:4] * inp_dim/im_h)
+            print(output)
+            print(ground_truths)
 
-        ground_truths_all.append(ground_truths)
-        predictions_all.append(output)
+            ground_truths_all.append(ground_truths)
+            predictions_all.append(output)
 
-    prec, rec, aps = custom_eval(predictions_all, ground_truths_all, num_gts=num_gts, ovthresh=0.2)
+    prec, rec, aps = custom_eval(predictions_all, ground_truths_all, num_gts=num_gts, ovthresh=0.3)
     print(prec, rec, np.mean(aps))
