@@ -1,0 +1,6 @@
+classes= 20
+train  = /home/cs/Documents/ssd/VOCdevkit/VOC2012/ImageSets/Main/trainPath.txt
+valid  = /home/cs/Documents/ssd/VOCdevkit/VOC2012/ImageSets/Main/valPath.txt
+names = data/voc.names
+backup = backup
+
