@@ -7,6 +7,6 @@ It will generate pruned_cfg and pruned_weights which could be used with the orig
 Also compatible with <a href="https://github.com/AlexeyAB/darknet"/>AlexeyAB</a> darknet modification.
 <br>
 <br>
-There is already a pruned model trained on VOC2007+VOC2012 in the output folder.
+There is already a pruned model of YOLOv3-TINY trained on VOC2007+VOC2012 in the output folder.
 <br>
 Check out the pruned filters in the pruned_channels.txt
