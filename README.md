@@ -1,4 +1,4 @@
-Channel pruning on a pytorch version of YOLOv3
+Added channel pruning on a pytorch version of <a href="https://github.com/ayooshkathuria/pytorch-yolo-v3"/>YOLOv3</a>
 <br>
 Use original darknet cfg and weights file as input.
 <br>
