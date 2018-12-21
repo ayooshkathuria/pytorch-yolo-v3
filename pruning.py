@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from darknet import Darknet
 import copy
+import os
 
 
 def load_pruned_info(path='output/pruned_channels.txt'):
@@ -35,7 +36,7 @@ def save_pruned_filters(layer_index_in_module_list, bn, path='output/pruned_chan
         file.write("batch_norm = {}\n".format(bn))
         file.write("pruned_filters = ")
         file.write(', '.join([str(x) for x in removed_index]) + "\n")
-        file.write("filters_num_before_pruning = " + blocks[layer_index_in_module_list + 1]['filters'] + "\n")
+        file.write("filters_after_pruning = " + blocks[layer_index_in_module_list + 1]['filters'] + "\n")
         file.write("-" * 50 + "\n")
 
 
@@ -247,9 +248,19 @@ def prune_conv(layer_index_in_module_list, bn=True, being_routed=False):
 
 
 if __name__ == '__main__':
-    read_index = 22
-    which_layer_to_prune = 22
 
+    which_layer_to_prune = 21
+
+    file_list = os.listdir('output')
+    file_name = [x for x in file_list if x.endswith('cfg')]
+    iters = []
+    for file in file_name:
+        name, _ = file.split('.')
+        iters.append(int(name[10:]))
+
+    read_index = max(iters)
+
+    print("Restoring process from iteration {}".format(read_index))
     model = Darknet('output/pruned_cfg{}.cfg'.format(read_index))
     model.load_weights('output/pruned_weights{}.weights'.format(read_index))
     # fm1 = torch.zeros((5, 3, 3))
@@ -324,7 +335,7 @@ if __name__ == '__main__':
         # find next conv layer to prune its channels
 
         if (layercfg['type'] == "conv" or layercfg['type'] == 'convolutional') and blocks[i + 1]['type'] != 'yolo':
-            print("Now pruning the layer {}................. Current layer type: {}".format(i - 1, blocks[i]['type']))
+            print("Now pruning the layer {} Current layer type: {}".format(i - 1, blocks[i]['type']))
             removed_index = []
             filters_num = int(layercfg['filters'])
             removed_num = round(filters_num * removed_rate)
@@ -365,4 +376,4 @@ if __name__ == '__main__':
                                                                                                 blocks[i]['type']))
             else:
                 print(
-                    "Skip layer {}............................ Current Layer type: {}".format(i - 1, blocks[i]['type']))
+                    "Skip layer {} Current Layer type: {}".format(i - 1, blocks[i]['type']))
