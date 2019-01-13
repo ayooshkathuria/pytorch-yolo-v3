@@ -116,7 +116,7 @@ if __name__ == '__main__':
             
             img, orig_im, dim = prep_image(frame, inp_dim)
             
-#            im_dim = torch.FloatTensor(dim).repeat(1,2)                        
+            im_dim = torch.FloatTensor(dim).repeat(1,2)                        
             
             
             if CUDA:

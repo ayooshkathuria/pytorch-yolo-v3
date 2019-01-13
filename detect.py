@@ -15,6 +15,8 @@ import pandas as pd
 import random 
 import pickle as pkl
 import itertools
+import platform
+
 
 class test_net(nn.Module):
     def __init__(self, num_layers, input_size):
@@ -298,8 +300,11 @@ if __name__ ==  '__main__':
     
             
     list(map(lambda x: write(x, im_batches, orig_ims), output))
-      
-    det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
+    
+    if platform.system() == 'Windows':
+        det_names = pd.Series(imlist).apply(lambda x: "{}\\det_{}".format(args.det,x.split("\\")[-1]))
+    else:
+        det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
     
     list(map(cv2.imwrite, det_names, orig_ims))
     
