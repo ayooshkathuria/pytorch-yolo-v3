@@ -3,6 +3,8 @@ runs
 *.pkl
 obj
 .DS_Store
+data_flower
+detection.png
 
 
 

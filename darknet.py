@@ -11,6 +11,7 @@ from util import count_parameters as count
 from util import convert2cpu as cpu
 from util import predict_transform
 
+
 class test_net(nn.Module):
     def __init__(self, num_layers, input_size):
         super(test_net, self).__init__()
@@ -32,7 +33,6 @@ def get_test_input():
     img_ = torch.from_numpy(img_).float()
     img_ = Variable(img_)
     return img_
-
 
 def parse_cfg(cfgfile):
     """
@@ -79,12 +79,10 @@ class MaxPoolStride1(nn.Module):
         pooled_x = nn.MaxPool2d(self.kernel_size, self.pad)(padded_x)
         return pooled_x
     
-
 class EmptyLayer(nn.Module):
     def __init__(self):
         super(EmptyLayer, self).__init__()
         
-
 class DetectionLayer(nn.Module):
     def __init__(self, anchors):
         super(DetectionLayer, self).__init__()
@@ -95,10 +93,6 @@ class DetectionLayer(nn.Module):
         prediction = x
         prediction = predict_transform(prediction, inp_dim, self.anchors, num_classes, confidence)
         return prediction
-        
-
-        
-
 
 class Upsample(nn.Module):
     def __init__(self, stride=2):
@@ -139,7 +133,8 @@ class ReOrgLayer(nn.Module):
 
 
 def create_modules(blocks):
-    net_info = blocks[0]     #Captures the information about the input and pre-processing    
+    net_info = blocks[0]     #Captures the information about the input and pre-processing
+    print(net_info)  
     
     module_list = nn.ModuleList()
     
@@ -155,7 +150,7 @@ def create_modules(blocks):
         
         if (x["type"] == "net"):
             continue
-        
+            
         #If it's a convolutional layer
         if (x["type"] == "convolutional"):
             #Get the info about the layer
@@ -272,8 +267,9 @@ def create_modules(blocks):
             
             
         else:
-            print("Something I dunno")
-            assert False
+            pass
+        #     print("Something I dunno")
+        #     assert False
 
 
         module_list.append(module)
@@ -335,12 +331,9 @@ class Darknet(nn.Module):
             if scale + 1 in scales:
                 scale_inds.extend(inds)
             i = num
-                    
-        
-        
-        return scale_inds
 
-                
+        return scale_inds
+         
     def forward(self, x):
         detections = []
         modules = self.blocks[1:]
@@ -380,18 +373,15 @@ class Darknet(nn.Module):
                 from_ = int(modules[i]["from"])
                 x = outputs[i-1] + outputs[i+from_]
                 outputs[i] = x
-                
-            
-            
-            elif module_type == 'yolo':        
+
+            elif module_type == 'yolo':
                 
                 anchors = self.module_list[i][0].anchors
                 #Get the input dimensions
                 inp_dim = int (self.net_info["height"])
                 
                 #Get the number of classes
-                num_classes = int (modules[i]["classes"])
-                
+                num_classes = int(self.net_info["classes"])
 
                 #Output the result
                 if not self.training:
@@ -401,12 +391,10 @@ class Darknet(nn.Module):
                 
                 if type(x) == int:
                     continue
-
                 
                 if not write:
                     detections = x
                     write = 1
-                
                 else:
                     detections = torch.cat((detections, x), 1)
                 
@@ -557,17 +545,3 @@ class Darknet(nn.Module):
                 
                 #Let us save the weights for the Convolutional layers
                 cpu(conv.weight.data).numpy().tofile(fp)
-               
-
-
-
-
-#
-#dn = Darknet('cfg/yolov3.cfg')
-#scales = dn.get_scale_inds([1,3], 416)
-#print(scales)
-#dn.load_weights("yolov3.weights")
-#inp = get_test_input()
-#a, interms = dn(inp)
-#dn.eval()
-#a_i, interms_i = dn(inp)

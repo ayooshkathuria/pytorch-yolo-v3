@@ -1,5 +1,11 @@
 # A Fork of PyTorch Implemation of YOLOv3 to Accomodate Custom Data
 
+**This fork is a work in progress and not ready for general use, yet.  It will be noted here when this is working as expected and ready for broader use.**
+
+Status:
+
+* [ ] Fix the algorithm that, when evaluated with `eval.py`, returns the same results regardless of the input.
+
 _We love you COCO, but we have our own interests now._
 
 This project is a "You Only Look Once" v3 sample using PyTorch, a fork of https://github.com/ayooshkathuria/pytorch-yolo-v3, with updates and improvements specifically for the Tiny architecture on custom data labeled with VoTT (versus the classic download of VOC or COCO data and labels).  This fork allows the user to create their own dataset.
@@ -20,7 +26,20 @@ Note:  This project is a work in progress and is based upon a research effort.
 
 ## Train
 
-Ensure the `yolov3-tiny.cfg` is set up to train (see first lines of file).  Note, the number of classes will affect the last convolutional layer filter numbers (conv layers before the yolo layer) as well as the yolo layers themselves - so will need to be modified manually to suit the needs of the user.  The tiny architecture has 6 anchors, whereas, the non-tiny or full sized YOLOv3 architecture has 9 anchors.  These anchors should be manually discovered with `kmeans.py` and specified in the `cfg` file. 
+
+### Modifications for Custom
+
+**Filters**
+
+Ensure the `yolov3-tiny.cfg` is set up to train (see first lines of file).  Note, the number of classes will affect the last convolutional layer filter numbers (conv layers before the yolo layer) as well as the yolo layers themselves - so will need to be modified manually to suit the needs of the user.
+
+Modify the filter number of the CNN layer directly before each [yolo] layer to be:  `filters=(classes + 5)x3 in the 3`.  So, So if `classes=1` then should be `filters=18`. If `classes=2` then write `filters=21`, and so on.
+
+**Anchors**
+
+The tiny architecture has 6 anchors, whereas, the non-tiny or full sized YOLOv3 architecture has 9 anchors.  These anchors should be manually discovered with `kmeans.py` and specified in the `cfg` file. 
+
+### Run
 
 Cmd:
 
@@ -34,9 +53,11 @@ Usage:
 
 Here, you will use your trained model in a live video feed.  Ensure the `yolov3-tiny.cfg` is set up to test (see first lines of file).  `runs` is where trained models get saved by default.
 
+### Run
+
 Cmd:
 
-    python video_demo.py --cfg cfg/yolov3-tiny.cfg --weights runs/<your trained model>.weights --datacfg data/obj.data --confidence 0.6
+    python live.py --cfg cfg/yolov3-tiny.cfg --weights runs/<your trained model>.weights --datacfg data/obj.data --confidence 0.6
 
 Usage:
     

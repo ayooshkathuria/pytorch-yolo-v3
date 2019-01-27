@@ -129,10 +129,10 @@ num_classes = int(num_classes)
 bs = int(bs)
 transforms = Sequence([YoloResize(inp_dim)])
 
-data = CustomDataset(root = "data", ann_file="data/train.txt", det_transforms = transforms)
+data = CustomDataset(root = "data", ann_file="data/train.txt", det_transforms=transforms)
 
-data_loader = DataLoader(data, batch_size = bs)
-optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay = wd)
+data_loader = DataLoader(data, batch_size=bs)
+optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=wd)
 
 def logloss(pred, target):
     assert pred.shape == target.shape, "Input and target must be the same shape"
@@ -266,6 +266,9 @@ itern = 0
 epochs = int(len(data) / bs)
 unfreeze_step = 0.8 * len(data)
 for image, ground_truth in data_loader:
+    print('ID ', data.examples[itern])
+    if len(ground_truth) == 0:
+        continue
 
     # # Track gradients in backprop
     # image = torch.tensor(image, requires_grad=True).to(device)

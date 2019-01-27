@@ -6,5 +6,5 @@ cython==0.29
 opencv-python==3.4.3.18
 matplotlib==3.0.0
 torchvision==0.2.1
-torch==1.0.0.dev20181018
+torch==1.0.0
 matplotlib==3.0.0

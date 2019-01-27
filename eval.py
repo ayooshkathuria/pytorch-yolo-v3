@@ -9,6 +9,7 @@ from data_aug.data_aug import Sequence
 # from bbox import bbox_iou
 from util import write_results, de_letter_box
 from live import prep_image
+from bbox import center_to_corner
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -206,6 +207,7 @@ def custom_eval(predictions_all,
         # Mark TPs and FPs
         if ovmax > ovthresh:
             tp[i] = 1.
+            print('tp!')
         else:
             fp[i] = 1.
 
@@ -266,33 +268,43 @@ if __name__ == "__main__":
     predictions_all = []
     num_gts = 0
 
-    for i, (img, target) in enumerate(test_loader):
-    # for i in range(len(test_data)):
+#     for i, (img, target) in enumerate(test_loader):
+    for i in range(len(test_data)):
         img_file = test_data.examples[i]
         print(i)
 
         # Read image and prepare for input to network
         img_tmp, orig_im, orig_im_dim = prep_image(plt.imread(img_file.rstrip()), inp_dim)
         im_dim = torch.FloatTensor(orig_im_dim).to(device)
+        print('im_dim ', im_dim)
 
         # Read ground truth labels
-        ground_truths = np.array(pd.read_csv(img_file.replace(img_file.split('.')[-1], 'txt'),
-            header=None, sep=' '))
+        ground_truths_file = img_file.replace(img_file.split('.')[-1], 'txt')
+        try:
+            ground_truths = np.array(pd.read_csv(ground_truths_file,
+                header=None, sep=' '))
+        except pd.errors.EmptyDataError:
+            continue
         ground_truths[:, 1:] = center_to_corner_2d(ground_truths[:, 1:] * orig_im_dim[0])
+        # ground_truths[:, 1:] = ground_truths[:, 1:] * orig_im_dim[0]
+
         class_labels = ground_truths[:, 0]
         # x1y1x2y2
         ground_truths = ground_truths[:, 1:]
         num_gts += ground_truths.shape[0]
-
-        target = target[:, 0, :]
-        target = np.asarray(target[1:])
         
-        img = img.to(device)
+        img = img_tmp.to(device)
         output = model(img)
-        output = output.unsqueeze(0).view(2535, 6)
-        keep = np.unique(np.asarray(nms(output, scores=output[:, 5], overlap=0.8)[0]))
-        output = output[keep, :]
+        print('output ', output)
+        output = center_to_corner(output)
+        
+        output = output.unsqueeze(0).view(-1, bbox_attrs)
+        # keep = np.unique(np.asarray(nms(output, scores=output[:, 5], overlap=0.3)[0]))
+        # print('keep ', keep)
+        # output = output[keep, :]
+        # print('output ', output)
         score_box = output[:, 5]
+        print('score_box ', score_box)
 
         # inp_dim is model input size, im_dim is actual image size
 
@@ -303,11 +315,18 @@ if __name__ == "__main__":
             # Remember original image is square (or should be)
             im_h = im_dim.cpu().numpy()[0]
             # output[:,0:4] = (output[:,0:4] * inp_dim/im_h)
-            print(output)
-            print(ground_truths)
+            output[:, 0] *= np.asarray(im_dim[0]/inp_dim)
+            output[:, 1] *= np.asarray(im_dim[1]/inp_dim)
+            output[:, 2] *= np.asarray(im_dim[0]/inp_dim)
+            output[:, 3] *= np.asarray(im_dim[1]/inp_dim)
+            # print('output ', output)
+            # print('ground_truths ', ground_truths)
 
             ground_truths_all.append(ground_truths)
             predictions_all.append(output)
+
+            # print('ground_truth_all ', ground_truths_all)
+            # print('predictions_all ', predictions_all)
 
     prec, rec, aps = custom_eval(predictions_all, ground_truths_all, num_gts=num_gts, ovthresh=0.3)
     print(prec, rec, np.mean(aps))

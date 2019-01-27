@@ -28,6 +28,8 @@ def transform_annotation(x, image):
     """Convert the annotation/target boxes to a format understood by
     dataset class"""
     #convert the PIL image to a numpy array
+    if not x:
+        return None
     boxes = np.array([a.rstrip().split(' ') for a in x], dtype='float32')
     
     #get the bounding boxes and convert them into proper format
@@ -309,88 +311,60 @@ class CustomDataset(CocoDetection):
     
     
     def __getitem__(self, idx):
-         example = self.examples[idx]
+        example = self.examples[idx]
 
-         
-         
-         path = os.path.join(os.getcwd(), example).rstrip()
-         image = cv2.imread(path)[:,:,::-1]   #Load the image from opencv and convert to RGB
-                  
-         
+        path = os.path.join(os.getcwd(), example).rstrip()
+        image = cv2.imread(path)[:,:,::-1]   #Load the image from opencv and convert to RGB
 
-         
-         
-         #seperate images, boxes and class_ids
-         ground_truth = None
-         with open(example.replace(example.split('.')[-1], 'txt')) as f:
-             ground_truth = transform_annotation(f.readlines(), image)
-         
+        label_table = np.zeros((sum(self.num_pred_boxes), 6), dtype = np.float)
+        label_table = self.get_pred_box_cords(label_table)
+                
+        #seperate images, boxes and class_ids
+        ground_truth = None
+        with open(example.replace(example.split('.')[-1], 'txt')) as f:
+            ground_truth = transform_annotation(f.readlines(), image)
 
-
-         self.debug_id = example
-         #apply the augmentations to the image and the bounding boxes
-         if self.det_transforms:
-             image, ground_truth = self.det_transforms(image, ground_truth)
-             
-        
-         im = image.copy()
-#         
-         #Convert the cv2 image into a PyTorch 
-         image = image.transpose(2,0,1)/255.0
-         image = torch.Tensor(image)
-         
-         label_table = np.zeros((sum(self.num_pred_boxes), 6), dtype = np.float)
-         label_table = self.get_pred_box_cords(label_table)
-
-        #  ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
-         ground_truth = ground_truth[np.newaxis,:,:].squeeze().reshape(-1,5)
-         
-         
-         if ground_truth.shape[0] > 0:
-             
-
-             #Generate a table of labels
-    
-             
-    
-             
-             #Get the bounding boxes to be assigned to the ground truth
-             ground_truth_predictors = self.get_ground_truth_predictors(ground_truth, label_table)
-             
-             
-             no_obj_cands = self.get_no_obj_candidates(ground_truth, label_table, ground_truth_predictors)
-    
-             
-             ground_truth_predictors = ground_truth_predictors.squeeze(1)
-             
-             
-    
-    
-            
-             label_table[:,:2] //= self.box_strides 
-             label_table[:,[2,3]] /= self.box_strides
-             
-             
-    
-             
-             ground_truth_map = self.get_ground_truth_map(ground_truth, label_table, ground_truth_predictors, no_obj_cands)
-             
-             
-             
-             ground_truth_map = torch.Tensor(ground_truth_map)
-         else:
+        if ground_truth is None:
+            #Convert the cv2 image into a PyTorch 
+            image = image.transpose(2,0,1)/255.0
+            image = torch.Tensor(image)
             ground_truth_map = torch.Tensor(label_table)
-    
-         
-         
-         return image, ground_truth_map
-         
+            return image, []
 
-         
-         
+        self.debug_id = example
+        #apply the augmentations to the image and the bounding boxes
+        if self.det_transforms:
+            image, ground_truth = self.det_transforms(image, ground_truth)
+    
+        im = image.copy()
+
+        #Convert the cv2 image into a PyTorch 
+        image = image.transpose(2,0,1)/255.0
+        image = torch.Tensor(image)
+            
+        #  ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
+            
+        if ground_truth.shape[0] > 0:
+            ground_truth = ground_truth[np.newaxis,:,:].squeeze().reshape(-1,5)
+            #Generate a table of labels
+            #Get the bounding boxes to be assigned to the ground truth
+            ground_truth_predictors = self.get_ground_truth_predictors(ground_truth, label_table)
+            
+            no_obj_cands = self.get_no_obj_candidates(ground_truth, label_table, ground_truth_predictors)
+
+            ground_truth_predictors = ground_truth_predictors.squeeze(1)
+
+            label_table[:,:2] //= self.box_strides 
+            label_table[:,[2,3]] /= self.box_strides
+
+            ground_truth_map = self.get_ground_truth_map(ground_truth, label_table, ground_truth_predictors, no_obj_cands)
+
+            ground_truth_map = torch.Tensor(ground_truth_map)
+        else:
+            ground_truth_map = torch.Tensor(label_table)
+
+        return image, ground_truth_map
                  
-         
-        
 ##        
 #####    
 #coco = CocoDataset(root = "COCO/train2017", annFile="COCO_ann_mod.pkl", det_transforms = transforms)

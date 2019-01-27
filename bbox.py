@@ -48,13 +48,20 @@ def center_to_corner(prediction):
 
 def corner_to_center(prediction):
     prediction[:,:,0] = (prediction[:,:,0] + prediction[:,:,2])/2
-    
     prediction[:,:,1] = (prediction[:,:,1] + prediction[:,:,3])/2
     prediction[:,:,2] = 2*(prediction[:,:,2] - prediction[:,:,0])
     prediction[:,:,3] = 2*(prediction[:,:,3] - prediction[:,:,1])
 
     return prediction
 
+
+def corner_to_center_2d(prediction):
+    prediction[:,0] = (prediction[:,0] + prediction[:,2])/2
+    prediction[:,1] = (prediction[:,1] + prediction[:,3])/2
+    prediction[:,2] = 2*(prediction[:,2] - prediction[:,0])
+    prediction[:,3] = 2*(prediction[:,3] - prediction[:,1])
+
+    return prediction
 
 def sanity_fix(box):
     if (box[0] > box[2]):

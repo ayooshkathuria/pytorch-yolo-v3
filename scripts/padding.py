@@ -58,7 +58,7 @@ def pad_image(np_img, new_img_file):
         plt.imsave(new_img_file, new_np_img)
     else:
         # Image already square - lucky!
-        pass
+        plt.imsave(new_img_file, np_img)
 
 
 def main():
