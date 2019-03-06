@@ -295,16 +295,16 @@ if __name__ ==  '__main__':
         cv2.rectangle(img, c1, c2,color, -1)
         cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
         return img
-    
-            
+
+
     list(map(lambda x: write(x, im_batches, orig_ims), output))
-      
-    det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
-    
+
+    det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det, (x.split("\\")[-1]).split('/')[-1]))
+
     list(map(cv2.imwrite, det_names, orig_ims))
-    
+
     end = time.time()
-    
+
     print()
     print("SUMMARY")
     print("----------------------------------------------------------")
@@ -318,11 +318,11 @@ if __name__ ==  '__main__':
     print("{:25s}: {:2.3f}".format("Average time_per_img", (end - load_batch)/len(imlist)))
     print("----------------------------------------------------------")
 
-    
+
     torch.cuda.empty_cache()
-    
-    
-        
-        
-    
-    
+
+
+
+
+
+
