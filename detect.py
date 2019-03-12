@@ -30,8 +30,11 @@ class test_net(nn.Module):
         return fwd(x)
         
 def get_test_input(input_dim, CUDA):
-    img = cv2.imread("dog-cycle-car.png")
-    img = cv2.resize(img, (input_dim, input_dim)) 
+    try:
+    	img = cv2.imread("dog-cycle-car.png")
+    	img = cv2.resize(img, (input_dim, input_dim)) 
+     except Exception as e:
+        print(str(e))       
     img_ =  img[:,:,::-1].transpose((2,0,1))
     img_ = img_[np.newaxis,:,:,:]/255.0
     img_ = torch.from_numpy(img_).float()
