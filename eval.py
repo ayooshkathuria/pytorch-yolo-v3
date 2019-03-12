@@ -253,11 +253,11 @@ if __name__ == "__main__":
 
     # Load weights PyTorch style
     model.load_state_dict(torch.load(args.weightsfile))
+    model = model.to(device)  ## Really? You're gonna eval on the CPU? :)
 
     # Set to evaluation (don't accumulate gradients)
+    # Make sure to call eval() method after loading weights
     model.eval()
-
-    model = model.to(device)  ## Really? You're gonna eval on the CPU? :)
 
     # Load test data and resize only
     transforms = Sequence([YoloResize(inp_dim)])
@@ -295,10 +295,10 @@ if __name__ == "__main__":
         
         img = img_tmp.to(device)
         output = model(img)
-        print('output ', output)
         output = center_to_corner(output)
         
         output = output.unsqueeze(0).view(-1, bbox_attrs)
+        # # Note:  does not work when we run nms
         # keep = np.unique(np.asarray(nms(output, scores=output[:, 5], overlap=0.3)[0]))
         # print('keep ', keep)
         # output = output[keep, :]
@@ -314,19 +314,14 @@ if __name__ == "__main__":
             # Get x1y1x2y2, mask conf, class conf
             # Remember original image is square (or should be)
             im_h = im_dim.cpu().numpy()[0]
-            # output[:,0:4] = (output[:,0:4] * inp_dim/im_h)
             output[:, 0] *= np.asarray(im_dim[0]/inp_dim)
             output[:, 1] *= np.asarray(im_dim[1]/inp_dim)
             output[:, 2] *= np.asarray(im_dim[0]/inp_dim)
             output[:, 3] *= np.asarray(im_dim[1]/inp_dim)
-            # print('output ', output)
-            # print('ground_truths ', ground_truths)
+
 
             ground_truths_all.append(ground_truths)
             predictions_all.append(output)
-
-            # print('ground_truth_all ', ground_truths_all)
-            # print('predictions_all ', predictions_all)
 
     prec, rec, aps = custom_eval(predictions_all, ground_truths_all, num_gts=num_gts, ovthresh=0.3)
     print(prec, rec, np.mean(aps))

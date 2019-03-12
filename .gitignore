@@ -1,3 +1,4 @@
+*.onnx
 *.weights
 runs
 *.pkl

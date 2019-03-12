@@ -17,6 +17,8 @@ import pickle as pkl
 import itertools
 from torch.utils.data import DataLoader
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 class test_net(nn.Module):
     def __init__(self, num_layers, input_size):
@@ -37,10 +39,8 @@ def get_test_input(input_dim, CUDA):
     img_ =  img[:,:,::-1].transpose((2,0,1))
     img_ = img_[np.newaxis,:,:,:]/255.0
     img_ = torch.from_numpy(img_).float()
-    img_ = Variable(img_)
     
-    if CUDA:
-        img_ = img_.cuda()
+    img_ = img_.to(device)
     num_classes
     return img_
 

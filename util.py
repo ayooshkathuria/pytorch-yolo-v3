@@ -40,7 +40,6 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, train=False, he
     num_anchors = len(anchors)
     h = prediction.size(2)
     w = prediction.size(3)
-    print('h w ', h, w)
     
     anchors = [(a[0]/stride, a[1]/stride) for a in anchors]
 
@@ -79,8 +78,6 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, train=False, he
     # scale x_center, y_center, width, height
     prediction[:,:,:4] *= stride
 
-    print('prediction ', prediction)
-
     return prediction
 
 def load_classes(namesfile):
@@ -103,15 +100,19 @@ def unique(tensor):
     return tensor_res
 
 def write_results(prediction, confidence, num_classes, nms=True, nms_conf=0.5):
+    """
+    prediction : tensor (2D)
+            [batch_index, x1, y1, x2, y2, objectness_score, class_index, class_probability]
+    """
     conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
     prediction = prediction*conf_mask
     
-    #If the entire batch contains
+    #If the entire batch contains 0, skip
     try:
         torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()
     except:
         return 0
-    
+
     # Center to corner for bounding box
     box_a = prediction.new(prediction.shape)
     box_a[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
@@ -119,6 +120,7 @@ def write_results(prediction, confidence, num_classes, nms=True, nms_conf=0.5):
     box_a[:,:,2] = (prediction[:,:,0] + prediction[:,:,2]/2) 
     box_a[:,:,3] = (prediction[:,:,1] + prediction[:,:,3]/2)
     prediction[:,:,:4] = box_a[:,:,:4]
+    print(prediction)
 
     batch_size = prediction.size(0)
     
@@ -264,16 +266,13 @@ def write_results_half(prediction, confidence, num_classes, nms = True, nms_conf
     except:
         return 0
     
-    
-    
-    box_a = prediction.new(prediction.shape)
-    box_a[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
-    box_a[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
-    box_a[:,:,2] = (prediction[:,:,0] + prediction[:,:,2]/2) 
-    box_a[:,:,3] = (prediction[:,:,1] + prediction[:,:,3]/2)
-    prediction[:,:,:4] = box_a[:,:,:4]
-    
-    
+    # Center to corner
+    # box_a = prediction.new(prediction.shape)
+    # box_a[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
+    # box_a[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
+    # box_a[:,:,2] = (prediction[:,:,0] + prediction[:,:,2]/2) 
+    # box_a[:,:,3] = (prediction[:,:,1] + prediction[:,:,3]/2)
+    # prediction[:,:,:4] = box_a[:,:,:4]
     
     batch_size = prediction.size(0)
     
@@ -284,7 +283,6 @@ def write_results_half(prediction, confidence, num_classes, nms = True, nms_conf
         #select the image from the batch
         image_pred = prediction[ind]
 
-        
         #Get the class having maximum score, and the index of that class
         #Get rid of num_classes softmax scores 
         #Add the class index and the class score of class having maximum score
@@ -293,7 +291,6 @@ def write_results_half(prediction, confidence, num_classes, nms = True, nms_conf
         max_conf_score = max_conf_score.half().unsqueeze(1)
         seq = (image_pred[:,:5], max_conf, max_conf_score)
         image_pred = torch.cat(seq, 1)
-        
         
         #Get rid of the zero entries
         non_zero_ind =  (torch.nonzero(image_pred[:,4]))
@@ -408,19 +405,14 @@ def de_letter_box(prediction, im_dim_list, inp_dim):
     scaling_factor = torch.min(inp_dim/im_dim_list,1)[0].view(-1,1)
     
     # scale xs and yx
-    print('prediction before scale ', prediction)
-    # prediction[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
-    # prediction[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
-    prediction[:,1:5] /= scaling_factor
-
-    print('prediction before clamp ', prediction)
+    prediction[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
+    prediction[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
 
     # loop over batches, clamp to [min, max]
     for i in range(prediction.shape[0]):
         # take predictions for bounding boxes TODO: figure out if abs is needed
         prediction[i, [1,3]] = torch.clamp(input=torch.abs(prediction[i, [1,3]]), min=0.0, max=im_dim_list[i,0])
         prediction[i, [2,4]] = torch.clamp(input=torch.abs(prediction[i, [2,4]]),  min=0.0, max=im_dim_list[i,1])
-    print('prediction from de_letter_box ', prediction)
     return prediction
 
 def write_preds(prediction, batch_imlist, save_dir, classes, colors):
