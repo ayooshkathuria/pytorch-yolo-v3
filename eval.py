@@ -3,10 +3,9 @@ import torch
 import os
 import argparse
 import random
-from customloader import CustomDataset, YoloResize
+from customloader import CustomDataset, YoloResize, YoloResizeTransform
 from torch.utils.data import DataLoader
 from data_aug.data_aug import Sequence
-# from bbox import bbox_iou
 from util import write_results, de_letter_box
 from live import prep_image
 from bbox import center_to_corner
@@ -14,10 +13,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+
 random.seed(0)
-
-
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 def arg_parse():
     """
     Parse arguments to the detect module
@@ -260,8 +259,10 @@ if __name__ == "__main__":
     model.eval()
 
     # Load test data and resize only
-    transforms = Sequence([YoloResize(inp_dim)])
-    test_data = CustomDataset(root="data", ann_file="data/test.txt", det_transforms=transforms)
+    transforms = Sequence([YoloResizeTransform(inp_dim)])
+    test_data = CustomDataset(root="data", ann_file="data/test.txt", 
+                              det_transforms=transforms,
+                              num_classes=num_classes)
     test_loader = DataLoader(test_data, batch_size=1)
 
     ground_truths_all = []

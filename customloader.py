@@ -305,16 +305,10 @@ class CustomDataset(Dataset):
         images = list()
         boxes = list()
 
-        for img in images:
-            print(img.shape)
-
         for b in batch:
             if len(b[1]) > 0:
                 images.append(b[0])
                 boxes.append(b[1])
-            
-        for img in images:
-            print(img.shape)
         
         if len(boxes) > 0:
             boxes = torch.stack(boxes, dim=0)

@@ -989,7 +989,6 @@ class YoloResizeTransform(object):
             PIL Image: Rescaled image.
         """
         orig_dim = img.shape
-        print('Orig dim ', img.shape)
         scale_x = orig_dim[0]/self.size
         scale_y = orig_dim[1]/self.size
         if bboxes:
@@ -1003,7 +1002,6 @@ class YoloResizeTransform(object):
 
         img = Image.fromarray(np.uint8(img))
         img = F.resize(img, (self.size, self.size), self.interpolation)
-        print('New dim ', img.size)
         return np.asarray(img), bboxes
 
     def __repr__(self):

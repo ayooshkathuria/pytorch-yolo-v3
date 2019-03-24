@@ -69,7 +69,6 @@ stop_layer = p_len - unfreeze
 model.load_weights(args.weightsfile, stop=stop_layer)
 
 # Freeze all weights before layer "stop_layer" from "unfreeze" argument
-print('p_len ', p_len)
 for p in model.parameters():
     if p_i < stop_layer:
         p.requires_grad = False
@@ -120,7 +119,6 @@ num_classes = int(num_classes)
 bs = int(bs)
 
 # Overloading custom data transforms from customloader (may add more here)
-print('Input dim ', inp_dim)
 custom_transforms = Sequence([YoloResizeTransform(inp_dim)])
 
 # Data instance and loader
@@ -223,7 +221,6 @@ def YOLO_loss(ground_truth, output):
     cls_loss = 0    
 
     for c_n in range(num_classes):
-        print('pred_ob', pred_ob)
         targ_labels = pred_ob[:,5 + c_n].view(-1,1)
         targ_labels = targ_labels.repeat(1,2)
         targ_labels[:,0] = 1 - targ_labels[:,0]
@@ -241,20 +238,10 @@ epochs = int(len(data) / bs)
 lr_update_step = 0.8 * epochs
 lr_updated = False
 for image, ground_truth in data_loader:
-    # print('ID ', data.examples[itern])
     if len(ground_truth) == 0:
         continue
-    # if ground_truth.size(0) == 0:
-    #     continue
-    # if ground_truth.size(1) == 0:
-    #     continue
-    # if ground_truth.float().sum().item() == 0:
-    #     continue
-    # if (ground_truth.data).sum() == 0:
-    #     continue
 
     # # Track gradients in backprop
-    # image = torch.tensor(image, requires_grad=True).to(device)
     image = image.to(device)
     ground_truth = ground_truth.to(device)
     
@@ -308,7 +295,6 @@ p_len = len(list(model.parameters()))
 stop_layer = 5 # Unfreeze all but this number of layers at the beginning
 
 # Unfreeze more layers for fine-tuning
-print('p_len ', p_len)
 for p in model.parameters():
     if p_i < stop_layer:
         p.requires_grad = False
@@ -333,9 +319,7 @@ data_loader = DataLoader(data, batch_size=bs,
                          collate_fn=data.collate_fn)
 
 for image, ground_truth in data_loader:
-    # print('ID ', data.examples[itern_fine])
     if len(ground_truth) == 0:
-        print('Continuing')
         continue
 
     # # Track gradients in backprop

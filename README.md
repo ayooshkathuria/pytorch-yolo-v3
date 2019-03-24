@@ -1,19 +1,21 @@
 # A Fork of PyTorch Implemation of YOLOv3 to Accomodate Custom Data
 
-**This fork is a work in progress and not ready for general use, yet.  It will be noted here when this is working as expected and ready for broader use.**
+**This fork is a work in progress.  It will be noted here when this is ready for broader, more production, use.**
 
-Status:
+Status (going well, main stuff done):
 
+* [x] Replace CUDA flag in lieu of the simple `tensor_xyz.to(device)` method
 * [x] Fix `customloader.py` to take multiple classes as an argument
 * [x] Add a custom collate function to `train.py` to detect empty boxes and exclude
 * [x] Fix resizing transform by creating a custom `YoloResize` transform called `YoloResizeTransform`
-
-* [ ] Fix the algorithm that, when evaluated with `eval.py`, returns the same results regardless of the input
+* [x] Add finetuning to the `train.py` script
+---
+* [ ] Fix the learning rate adjustment to decrease more consistently during training and finetuning
 * [ ] Fix `customloader.py` to take custom (as an argument) anchors, anchor numbers and model input dims
 * [ ] Ensure `live.py` is correctly drawing bounding boxes
-* [ ] Ensure this works with full sized YOLOv3 network (only tested with the tiny architecture)
-- [ ] flake8 (clean up extra blank lines, long lines, etc.)
-- [ ] Remove `*` imports in place of explicit imports
+* [ ] Ensure this codebase works with full sized YOLOv3 network (only tested with the tiny architecture)
+* [ ] flake8 (clean up extra blank lines, long lines, etc.)
+* [ ] Remove `*` imports in place of explicit imports
 
 _We love you COCO, but we have our own interests now._
 
@@ -21,12 +23,12 @@ This project is a "You Only Look Once" v3 sample using PyTorch, a fork of https:
 
 <img src="imgs/id_plumeria_sml.png" width="70%" align="center">
 
-Note:  This project is a work in progress and is based upon a research effort.
+Note:  This project is a work in progress.
 
 ## Setup
 
 * Install the required Python packages (`pip install -r requirements.txt`).
-* Download the [full YOLO v3 (237 MB)](https://pjreddie.com/media/files/yolov3.weights) or [tiny YOLO v3 (33.8 MB)](https://pjreddie.com/media/files/yolov3-tiny.weights) model.
+* Download the [full YOLO v3 (237 MB)](https://pjreddie.com/media/files/yolov3.weights) or [tiny YOLO v3 (33.8 MB)](https://pjreddie.com/media/files/yolov3-tiny.weights) model.  **Fun fact:  this project utilizes the weights originating in Darknet format**.
 
 ## Collect and Label Data
 
@@ -40,7 +42,7 @@ Note:  This project is a work in progress and is based upon a research effort.
 
 **Filters**
 
-Ensure the `yolov3-tiny.cfg` is set up to train (see first lines of file).  Note, the number of classes will affect the last convolutional layer filter numbers (conv layers before the yolo layer) as well as the yolo layers themselves - so will need to be modified manually to suit the needs of the user.
+Ensure the `yolov3-tiny.cfg` is set up to train (see first lines of file).  Note, the number of classes will affect the last convolutional layer filter numbers (conv layers before the yolo layer) as well as the yolo layers themselves - so **will need to be modified manually** to suit the needs of the user.
 
 Modify the filter number of the CNN layer directly before each [yolo] layer to be:  `filters=(classes + 5)x3`.  So, if `classes=1` then should be `filters=18`. If `classes=2` then write `filters=21`, and so on.
 
@@ -48,9 +50,26 @@ Modify the filter number of the CNN layer directly before each [yolo] layer to b
 
 The tiny architecture has 6 anchors, whereas, the non-tiny or full sized YOLOv3 architecture has 9 anchors.  These anchors should be manually discovered with `kmeans.py` and specified in the `cfg` file. 
 
+**Additional Instructions**
+
+* Create a list of the training images file paths, one per line, called `train.txt` and place it in the `data` folder.  e.g.
+
+`train.txt`
+```
+data/obj/482133.JPG
+data/obj/482128.JPG
+data/obj/482945.jpg
+data/obj/483153.JPG
+data/obj/481427.jpg
+data/obj/480836.jpg
+data/obj/483522.JPG
+data/obj/482535.JPG
+data/obj/483510.JPG
+```
+
 ### Run
 
-Cmd:
+Cmd (this will be for one-class detector):
 
     python train.py --cfg cfg/yolov3-tiny.cfg --weights yolov3-tiny.weights --datacfg data/obj.data
 
@@ -62,11 +81,26 @@ Usage:
 
 Here, you will use your trained model in a live video feed.  Ensure the `yolov3-tiny.cfg` is set up to test (see first lines of file).  `runs` is where trained models get saved by default.
 
+**Additional Instructions**
+
+* Create a list of the test images file paths, one per line, called `test.txt` and place it in the `data` folder.  e.g.
+
+`test.txt`
+```
+data/obj/482308.JPG
+data/obj/483367.JPG
+data/obj/483037.jpg
+data/obj/481962.JPG
+data/obj/481472.jpg
+data/obj/483303.JPG
+data/obj/483326.JPG
+```
+
 ### Run
 
 Cmd:
 
-    python live.py --cfg cfg/yolov3-tiny.cfg --weights runs/<your trained model>.weights --datacfg data/obj.data --confidence 0.6
+    python live.py --cfg cfg/yolov3-tiny.cfg --weights runs/<your trained model>.pth --datacfg data/obj.data --confidence 0.6
 
 Usage:
     
