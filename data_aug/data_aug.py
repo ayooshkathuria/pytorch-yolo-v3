@@ -3,6 +3,9 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
+from torchvision.transforms import functional as F
+from PIL import Image
+
 import sys
 import os 
 
@@ -960,4 +963,50 @@ class RandomHSV(object):
         
         
         return img, bboxes
+
+class YoloResizeTransform(object):
+    """Resize the input PIL Image to the given size.
+    Args:
+        size (sequence or int): Desired output size. If size is a sequence like
+            (h, w), output size will be matched to this. If size is an int,
+            smaller edge of the image will be matched to this number.
+            i.e, if height > width, then image will be rescaled to
+            (size * height / width, size)
+        interpolation (int, optional): Desired interpolation. Default is
+            ``PIL.Image.BILINEAR``
+    """
+
+    def __init__(self, size, interpolation=Image.BILINEAR):
+        assert isinstance(size, int) or (isinstance(size, Iterable) and len(size) == 2)
+        self.size = size
+        self.interpolation = interpolation
+
+    def __call__(self, img, bboxes):
+        """
+        Args:
+            img (PIL Image): Image to be scaled.
+        Returns:
+            PIL Image: Rescaled image.
+        """
+        orig_dim = img.shape
+        print('Orig dim ', img.shape)
+        scale_x = orig_dim[0]/self.size
+        scale_y = orig_dim[1]/self.size
+        if bboxes:
+            bboxes = bboxes[1]
+            bboxes[:, 0] *= scale_x
+            bboxes[:, 2] *= scale_x
+            bboxes[:, 1] *= scale_y
+            bboxes[:, 3] *= scale_y
+        else:
+            bboxes =[]
+
+        img = Image.fromarray(np.uint8(img))
+        img = F.resize(img, (self.size, self.size), self.interpolation)
+        print('New dim ', img.size)
+        return np.asarray(img), bboxes
+
+    def __repr__(self):
+        interpolate_str = _pil_interpolation_to_str[self.interpolation]
+        return self.__class__.__name__ + '(size={0}, interpolation={1})'.format(self.size, interpolate_str)
     

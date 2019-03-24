@@ -1,5 +1,6 @@
 import torch 
 from torchvision.datasets import CocoDetection
+from torch.utils.data import Dataset
 import os
 import numpy as np
 import pickle as pkl
@@ -15,16 +16,13 @@ import os
 
 
 inp_dim = 416
-
 # Custom transform options
-transforms = Sequence([ RandomHSV(), RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10),  RandomShear(), YoloResize(inp_dim)])
-# transforms = Sequence([YoloResize(inp_dim)])
+# custom_transforms = Sequence([ RandomHSV(), RandomHorizontalFlip(), RandomScaleTranslate(translate=0.05, scale=(0,0.3)), RandomRotate(10),  RandomShear(), YoloResize(inp_dim)])
+custom_transforms = Sequence([ RandomHSV(), YoloResize(inp_dim)])
 
 random.seed(0)
 
-#from kmeans.kmeans import *
-
-def transform_annotation(x, image):
+def transform_annotation(image, x):
     """Convert the annotation/target boxes to a format understood by
     dataset class"""
     #convert the PIL image to a numpy array
@@ -43,11 +41,10 @@ def transform_annotation(x, image):
     return image, ground_truth
 
 
-class CustomDataset(CocoDetection):
-    def __init__(self, root = None, ann_file = None, det_transforms = None):
+class CustomDataset(Dataset):
+    def __init__(self, root, num_classes, ann_file, det_transforms=None):
         """Note:  When using VoTT and exported to YOLO, 
         ann_file is a list to paths of images"""
-#        super().__init__(root, annFile, None, None)
         self.root = root
         
         self.examples = None
@@ -59,7 +56,7 @@ class CustomDataset(CocoDetection):
         self.inp_dim = 416
         self.strides = [32,16]
         self.anchor_nums = [3,3]
-        self.num_classes = 1
+        self.num_classes = num_classes
         self.anchors = [[10,14],  [23,27],  [37,58],  [81,82],  [135,169],  [344,319]]
         
         self.anchors = np.array(self.anchors)[::-1]
@@ -70,7 +67,6 @@ class CustomDataset(CocoDetection):
         self.box_strides = self.get_box_strides()
         self.debug_id = None
 
-    
     def __len__(self):
 #        return super().__len__()
         #return len(self.ids)
@@ -116,20 +112,16 @@ class CustomDataset(CocoDetection):
             
             label_map[i:i+pred_boxes,[2,3]] = scale_anchors
          
-            
             i += pred_boxes
             j += self.anchor_nums[n]
         return label_map        
 
-    def get_ground_truth_predictors(self, ground_truth, label_map, im = None):
+    def get_ground_truth_predictors(self, ground_truth, label_map, im=None):
         i = 0    #indexes the anchor boxes
         j = 0    
                 
         total_boxes_per_gt = sum(self.anchor_nums)
-        
         num_ground_truth_in_im = ground_truth.shape[0]
-        
-
         inds = np.zeros((num_ground_truth_in_im, total_boxes_per_gt), dtype = np.int)
         
         #n index the the detection maps
@@ -141,43 +133,21 @@ class CustomDataset(CocoDetection):
                 print(ground_truth)
                 assert False
             
-            
             a = offset + self.anchor_nums[n]*(inp_dim//self.strides[n]*center_cells[:,1] + center_cells[:,0])
-            
             inds[:,sum(self.anchor_nums[:n])] = a
             
             for x in range(1, self.anchor_nums[n]):
                 inds[:,sum(self.anchor_nums[:n]) + x] = a + x 
       
-    
             i += anchor
             j += self.num_pred_boxes[n]
         
         candidate_boxes = label_map[inds][:,:,:4]
-        
-
-        
-        
-    
-        
         candidate_boxes = center_to_corner(candidate_boxes)
-        
-        
-                
-
-        
-    
         ground_truth_boxes = center_to_corner(ground_truth.copy()[np.newaxis]).squeeze(0)[:,:4]
-        
-
         candidate_boxes = candidate_boxes.transpose(0,2,1)
-        
         ground_truth_boxes = ground_truth_boxes[:,:,np.newaxis]
-        
         candidate_ious = bbox_iou(candidate_boxes, ground_truth_boxes, lib="numpy")
-        
-        
-        
         prediction_boxes = np.zeros((num_ground_truth_in_im,1), dtype=np.int)
 
         for i in range(num_ground_truth_in_im):
@@ -185,7 +155,6 @@ class CustomDataset(CocoDetection):
             max_iou_ind = np.argmax(candidate_ious)
             max_iou_row = max_iou_ind // total_boxes_per_gt
             max_iou_col = max_iou_ind % total_boxes_per_gt
-            
             
             #get the index (in label map) of the box with maximum IoU
             max_iou_box = inds[max_iou_row, max_iou_col]
@@ -206,39 +175,19 @@ class CustomDataset(CocoDetection):
     def get_no_obj_candidates(self, ground_truth, label_map, ground_truth_predictors):
                 
         total_boxes_per_gt = sum(self.anchor_nums)
-        
         num_ground_truth_in_im = ground_truth.shape[0]
-        
-        
-        
         inds = np.zeros((num_ground_truth_in_im, total_boxes_per_gt), dtype = np.int)
-        
         inds = np.arange(sum(self.num_pred_boxes)).astype(int)
-        
-        inds = inds[np.newaxis].repeat(num_ground_truth_in_im, axis = 0)
-        
-        
+        inds = inds[np.newaxis].repeat(num_ground_truth_in_im, axis = 0) 
         candidate_boxes = label_map[inds][:,:,:4]
-        
         candidate_boxes = center_to_corner(candidate_boxes)
-        
-        
-        
-    
         ground_truth_boxes = center_to_corner(ground_truth.copy()[np.newaxis]).squeeze(0)[:,:4]
-        
-    
         candidate_boxes = candidate_boxes.transpose(0,2,1)
-        
         ground_truth_boxes = ground_truth_boxes[:,:,np.newaxis]
-        
         candidate_ious = bbox_iou(candidate_boxes, ground_truth_boxes, lib = "numpy")
-        
         candidate_ious[:, ground_truth_predictors] = 1
         
-        
         max_ious_per_box = np.max(candidate_ious, 0)
-        
         no_obj_cands = (np.nonzero(max_ious_per_box < 0.5)[0].astype(int))
         
         return no_obj_cands
@@ -249,23 +198,14 @@ class CustomDataset(CocoDetection):
         #Set the objectness confidence of these boxes to 1
         
         label_map[:,4] = -1
-        
         predboxes = label_map[ground_truth_predictors]
-        
         predboxes[:,4] = 1
-        
         label_map[no_obj_cands] = 0
         
         assert ground_truth_predictors.shape[0] == predboxes.shape[0], print(self.debug_id)
-        
 
-        
-        
         ground_truth_strides = self.box_strides[ground_truth_predictors]
         ground_truth[:,:4] /= ground_truth_strides
-        
-        
-
 
         try:
             predboxes[:,[0,1]] = ground_truth[:,[0,1]] - predboxes[:,[0,1]]
@@ -274,19 +214,12 @@ class CustomDataset(CocoDetection):
             print(self.debug_id)
             assert False
 
-        
         if 0 in predboxes[:,[0,1]]:
             predboxes[:,[0,1]] += 0.0001*(predboxes[:,[0,1]] == 0)
-
-
-
         predboxes[:,[0,1]] = -1*np.log(1/(predboxes[:,[0,1]]) - 1)
         
         mask = np.logical_and(ground_truth[:,2], ground_truth[:,3])
-        
-            
         mask= mask.reshape(-1,1)
-        
         ground_truth *= mask 
         
         nz_inds = np.nonzero(ground_truth[:,0])
@@ -296,46 +229,41 @@ class CustomDataset(CocoDetection):
         
         try:
             predboxes[:,[2,3]] = np.log(ground_truth[:,[2,3]] / predboxes[:,[2,3]])
-        
         except:
             print(self.debug_id)
             assert False
         
         predboxes[:,5] = ground_truth[:,4]
-        
         label_map[ground_truth_predictors] = predboxes
         
         return label_map
-    
 
-    
-    
     def __getitem__(self, idx):
         example = self.examples[idx]
 
         path = os.path.join(os.getcwd(), example).rstrip()
         image = cv2.imread(path)[:,:,::-1]   #Load the image from opencv and convert to RGB
 
-        label_table = np.zeros((sum(self.num_pred_boxes), 6), dtype = np.float)
+        label_table = np.zeros((sum(self.num_pred_boxes), 6), dtype=np.float)
         label_table = self.get_pred_box_cords(label_table)
                 
         #seperate images, boxes and class_ids
         ground_truth = None
         with open(example.replace(example.split('.')[-1], 'txt')) as f:
-            ground_truth = transform_annotation(f.readlines(), image)
+            ground_truth = transform_annotation(image, f.readlines())
 
-        if ground_truth is None:
-            #Convert the cv2 image into a PyTorch 
-            image = image.transpose(2,0,1)/255.0
-            image = torch.Tensor(image)
-            ground_truth_map = torch.Tensor(label_table)
-            return image, []
+        # if ground_truth is None:
+        #     #Convert the cv2 image into a PyTorch 
+        #     image = image.transpose(2,0,1)/255.0
+        #     image = torch.Tensor(image)
+        #     ground_truth_map = torch.Tensor(label_table)
+        #     print('ground_truth was None')
+        #     return image, []
 
         self.debug_id = example
         #apply the augmentations to the image and the bounding boxes
         if self.det_transforms:
             image, ground_truth = self.det_transforms(image, ground_truth)
-    
         im = image.copy()
 
         #Convert the cv2 image into a PyTorch 
@@ -344,7 +272,7 @@ class CustomDataset(CocoDetection):
             
         #  ground_truth = corner_to_center(ground_truth[np.newaxis,:,:]).squeeze().reshape(-1,5)
             
-        if ground_truth.shape[0] > 0:
+        if len(ground_truth) > 0 and ground_truth.shape[0] > 0:
             ground_truth = ground_truth[np.newaxis,:,:].squeeze().reshape(-1,5)
             #Generate a table of labels
             #Get the bounding boxes to be assigned to the ground truth
@@ -361,47 +289,35 @@ class CustomDataset(CocoDetection):
 
             ground_truth_map = torch.Tensor(ground_truth_map)
         else:
-            ground_truth_map = torch.Tensor(label_table)
+            ground_truth_map = torch.zeros((0, 6), dtype=torch.float) #torch.Tensor(label_table)
 
         return image, ground_truth_map
-                 
-##        
-#####    
-#coco = CocoDataset(root = "COCO/train2017", annFile="COCO_ann_mod.pkl", det_transforms = transforms)
-###
-#coco_loader = DataLoader(coco, batch_size = 5)
-#
-#for x in coco_loader:
-#    print(x[0].shape, x[1].shape)    
-#    assert False
-#    pass
 
-def tiny_coco(cocoloader, num):
-    i = 0
-    li = []
-    
-    for x in cocoloader:
-        print(i)
-        
-        li.append(x)
-        i += 1
-        if i > num - 1:
-            break
-    num = num / 1000
-    pkl.dump(li, open("COCO_{}k.pkl.format(num)", "wb"))
+    def collate_fn(self, batch):
+        """
+        Since each image may have a different number of objects, we need a collate function (to be passed to the DataLoader).
+        This describes how to combine these tensors of different sizes. We use lists.
+        Note: this need not be defined in this Class, can be standalone.
+        :param batch: an iterable of N sets from __getitem__()
+        :return: a tensor of images, lists of varying-size tensors of bounding boxes, labels
+        """
 
+        images = list()
+        boxes = list()
 
-def get_num_boxes(cocoloader):
-    num_boxes = 0
-    for x in cocoloader:
-        x = trasform_annotation(x)
-        bboxes = x[1]
-        bbox_dims_h = bboxes[:,3] - bboxes[:,1]
-        bbox_dims_w = bboxes[:,2] - bboxes[:,0]
+        for img in images:
+            print(img.shape)
+
+        for b in batch:
+            if len(b[1]) > 0:
+                images.append(b[0])
+                boxes.append(b[1])
+            
+        for img in images:
+            print(img.shape)
         
-    
-        bbox_dims = np.stack((bbox_dims_w, bbox_dims_h)).T
+        if len(boxes) > 0:
+            boxes = torch.stack(boxes, dim=0)
+            images = torch.stack(images, dim=0)
         
-        num_boxes += bbox_dims.shape[0]
-    
-    return num_boxes
+        return images, boxes

@@ -4,11 +4,18 @@
 
 Status:
 
-* [ ] Fix the algorithm that, when evaluated with `eval.py`, returns the same results regardless of the input.
+* [x] Fix `customloader.py` to take multiple classes as an argument
+* [x] Add a custom collate function to `train.py` to detect empty boxes and exclude
+* [x] Fix resizing transform by creating a custom `YoloResize` transform called `YoloResizeTransform`
+
+* [ ] Fix the algorithm that, when evaluated with `eval.py`, returns the same results regardless of the input
+* [ ] Fix `customloader.py` to take custom (as an argument) anchors, anchor numbers and model input dims
+* [ ] Ensure `live.py` is correctly drawing bounding boxes
+* [ ] Ensure this works with full sized YOLOv3 network (only tested with the tiny architecture)
 
 _We love you COCO, but we have our own interests now._
 
-This project is a "You Only Look Once" v3 sample using PyTorch, a fork of https://github.com/ayooshkathuria/pytorch-yolo-v3, with updates and improvements specifically for the Tiny architecture on custom data labeled with VoTT (versus the classic download of VOC or COCO data and labels).  This fork allows the user to create their own dataset.
+This project is a "You Only Look Once" v3 sample using PyTorch, a fork of https://github.com/ayooshkathuria/pytorch-yolo-v3, with updates and improvements specifically for the Tiny architecture on custom data labeled with VoTT (versus the classic download of VOC or COCO data and labels).  This fork allows the user to **bring their own dataset**.
 
 <img src="imgs/id_plumeria_sml.png" width="70%" align="center">
 
@@ -33,7 +40,7 @@ Note:  This project is a work in progress and is based upon a research effort.
 
 Ensure the `yolov3-tiny.cfg` is set up to train (see first lines of file).  Note, the number of classes will affect the last convolutional layer filter numbers (conv layers before the yolo layer) as well as the yolo layers themselves - so will need to be modified manually to suit the needs of the user.
 
-Modify the filter number of the CNN layer directly before each [yolo] layer to be:  `filters=(classes + 5)x3 in the 3`.  So, So if `classes=1` then should be `filters=18`. If `classes=2` then write `filters=21`, and so on.
+Modify the filter number of the CNN layer directly before each [yolo] layer to be:  `filters=(classes + 5)x3`.  So, if `classes=1` then should be `filters=18`. If `classes=2` then write `filters=21`, and so on.
 
 **Anchors**
 
@@ -61,7 +68,7 @@ Cmd:
 
 Usage:
     
-    python video_demo.py --help
+    python live.py --help
 
 
 ## Updates/Improvements

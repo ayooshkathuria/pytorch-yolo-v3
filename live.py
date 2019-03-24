@@ -127,21 +127,19 @@ if __name__ == '__main__':
     assert cap.isOpened(), 'Cannot capture source'
     
     frames = 0
-    start = time.time()    
+    start = time.time()
+
     while cap.isOpened():
         
         ret, frame = cap.read()
         if ret:
-            img, orig_im, orig_im_dim = prep_image(frame, inp_dim)
-            orig_im_dim = torch.FloatTensor(orig_im_dim).to(device)                    
             
-            img = img.to(device)
-            
-            with torch.no_grad():   
-                output = model(img)
-                # output = center_to_corner(output)
-            # write_results does center to corner, returns [batch_ind, output]
-            output = write_results(output, confidence, num_classes, nms=False, nms_conf=nms_thesh)
+            img, orig_im, dim = prep_image(frame, inp_dim)
+            im_dim = torch.FloatTensor(dim).repeat(1,2)
+
+            model = model.to(device)
+            output = model(img)
+            output = write_results(output, confidence, num_classes, nms=True, nms_conf=nms_thesh)
 
             if type(output) == int:
                 frames += 1
@@ -152,16 +150,21 @@ if __name__ == '__main__':
                     break
                 continue
 
-            # output = de_letter_box(output, orig_im_dim, inp_dim)
-            classes = load_classes(args.datafile)
+            im_dim = im_dim.repeat(output.size(0), 1)
+            scaling_factor = torch.min(inp_dim/im_dim,1)[0].view(-1,1)
+            
+            output[:,[1,3]] -= (inp_dim - scaling_factor*im_dim[:,0].view(-1,1))/2
+            output[:,[2,4]] -= (inp_dim - scaling_factor*im_dim[:,1].view(-1,1))/2
+            
+            output[:,1:5] /= scaling_factor
+    
+            for i in range(output.shape[0]):
+                output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, im_dim[i,0])
+                output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, im_dim[i,1])
+            
+            classes = load_classes('data/obj.names')
             colors = pkl.load(open("pallete", "rb"))
             
-            # Scale image back to original size
-            output[:, 1] *= orig_im_dim[0]/torch.tensor(inp_dim)
-            output[:, 2] *= orig_im_dim[1]/torch.tensor(inp_dim)
-            output[:, 3] *= orig_im_dim[0]/torch.tensor(inp_dim)
-            output[:, 4] *= orig_im_dim[1]/torch.tensor(inp_dim)
-
             list(map(lambda x: write(x, orig_im), output))
             
             cv2.imshow("frame", orig_im)
@@ -171,6 +174,6 @@ if __name__ == '__main__':
                 break
             frames += 1
             print("FPS of the video is {:5.2f}".format( frames / (time.time() - start)))
-
+            
         else:
             break
