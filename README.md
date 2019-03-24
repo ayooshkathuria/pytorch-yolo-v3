@@ -12,6 +12,8 @@ Status:
 * [ ] Fix `customloader.py` to take custom (as an argument) anchors, anchor numbers and model input dims
 * [ ] Ensure `live.py` is correctly drawing bounding boxes
 * [ ] Ensure this works with full sized YOLOv3 network (only tested with the tiny architecture)
+- [ ] flake8 (clean up extra blank lines, long lines, etc.)
+- [ ] Remove `*` imports in place of explicit imports
 
 _We love you COCO, but we have our own interests now._
 
