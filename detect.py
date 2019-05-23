@@ -108,6 +108,7 @@ if __name__ ==  '__main__':
     start = 0
 
     CUDA = torch.cuda.is_available()
+    # CUDA = False
 
     num_classes = 80
     classes = load_classes('data/coco.names') 
@@ -123,7 +124,7 @@ if __name__ ==  '__main__':
     assert inp_dim % 32 == 0 
     assert inp_dim > 32
 
-    #If there's a GPU availible, put the model on GPU
+    #If there's a GPU available, put the model on GPU
     if CUDA:
         model.cuda()
     
@@ -136,22 +137,24 @@ if __name__ ==  '__main__':
     try:
         imlist = [osp.join(osp.realpath('.'), images, img) for img in os.listdir(images) if os.path.splitext(img)[1] == '.png' or os.path.splitext(img)[1] =='.jpeg' or os.path.splitext(img)[1] =='.jpg']
     except NotADirectoryError:
-        imlist = []
-        imlist.append(osp.join(osp.realpath('.'), images))
+        imlist = [osp.join(osp.realpath('.'), images)]
     except FileNotFoundError:
         print ("No file or directory with the name {}".format(images))
         exit()
-        
+    if '.' in args.det:
+        print('Please input a det directory not a file')
+        exit(1)
     if not os.path.exists(args.det):
         os.makedirs(args.det)
-        
+
     load_batch = time.time()
     
+    # batches include [(img_, orig_im, dim)] img_ is reshaped
     batches = list(map(prep_image, imlist, [inp_dim for x in range(len(imlist))]))
     im_batches = [x[0] for x in batches]
     orig_ims = [x[1] for x in batches]
     im_dim_list = [x[2] for x in batches]
-    im_dim_list = torch.FloatTensor(im_dim_list).repeat(1,2)
+    im_dim_list = torch.FloatTensor(im_dim_list).repeat(1,2)   # dim.shape=(width x height)
     
     
     
@@ -174,7 +177,7 @@ if __name__ ==  '__main__':
     
 
     write = False
-    model(get_test_input(inp_dim, CUDA), CUDA)
+    # model(get_test_input(inp_dim, CUDA), CUDA)
     
     start_det_loop = time.time()
     
@@ -195,7 +198,7 @@ if __name__ ==  '__main__':
         # B x (bbox cord x no. of anchors) x grid_w x grid_h --> B x bbox x (all the boxes) 
         # Put every proposed box as a row.
         with torch.no_grad():
-            prediction = model(Variable(batch), CUDA)
+            prediction = model(Variable(batch), CUDA)   # prediction.shape=(1, 10647, 85)
         
 #        prediction = prediction[:,scale_indices]
 
@@ -208,7 +211,7 @@ if __name__ ==  '__main__':
         #clubbing these ops in one loop instead of two. 
         #loops are slower than vectorised operations. 
         
-        prediction = write_results(prediction, confidence, num_classes, nms = True, nms_conf = nms_thesh)
+        prediction = write_results(prediction, confidence, num_classes, nms=True, nms_conf=nms_thesh)
         
         
         if type(prediction) == int:
@@ -282,26 +285,31 @@ if __name__ ==  '__main__':
     draw = time.time()
 
 
-    def write(x, batches, results):
-        c1 = tuple(x[1:3].int())
-        c2 = tuple(x[3:5].int())
-        img = results[int(x[0])]
-        cls = int(x[-1])
-        label = "{0}".format(classes[cls])
-        color = random.choice(colors)
-        cv2.rectangle(img, c1, c2,color, 1)
-        t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
-        c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
-        cv2.rectangle(img, c1, c2,color, -1)
-        cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
+    def write(output_info, results):
+        img = results[int(output_info[0][0])]
+        if torch.sum(output_info[:, 1:]) == 0:
+            return img
+        for x in output_info:
+            c1 = tuple(x[1:3].int())
+            c2 = tuple(x[3:5].int())
+            cls = int(x[-1])
+            label = "{0}".format(classes[cls])
+            color = random.choice(colors)
+            cv2.rectangle(img, c1, c2, color, 1)
+            t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
+            c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
+            cv2.rectangle(img, c1, c2, color, -1)
+            cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
         return img
     
             
-    list(map(lambda x: write(x, im_batches, orig_ims), output))
-      
-    det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
-    
-    list(map(cv2.imwrite, det_names, orig_ims))
+    num_index = torch.unique(output[:, 0])
+    output = [output[output[:, 0] == num] for num in num_index]
+    images_write_list = list(map(lambda x: write(x, orig_ims), output))
+
+    det_names = [osp.join(args.det, osp.split(img)[-1]) for img in imlist]
+    for output_file_name, img in zip(det_names, images_write_list):
+        cv2.imwrite(output_file_name, img)
     
     end = time.time()
     
