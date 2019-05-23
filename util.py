@@ -22,7 +22,7 @@ def convert2cpu(matrix):
     else:
         return matrix
 
-def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
+def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA=True):
     batch_size = prediction.size(0)
     stride =  inp_dim // prediction.size(2)
     grid_size = inp_dim // stride
@@ -96,7 +96,7 @@ def unique(tensor):
     tensor_res.copy_(unique_tensor)
     return tensor_res
 
-def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.4):
+def write_results(prediction, confidence, num_classes, nms=True, nms_conf=0.4):
     conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
     prediction = prediction*conf_mask
     
@@ -112,13 +112,13 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
     box_a[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
     box_a[:,:,2] = (prediction[:,:,0] + prediction[:,:,2]/2) 
     box_a[:,:,3] = (prediction[:,:,1] + prediction[:,:,3]/2)
-    prediction[:,:,:4] = box_a[:,:,:4]
+    prediction[:,:,:4] = box_a[:,:,:4]    # (xywh) --> (x1, y1, x2, y2)
     
 
     
     batch_size = prediction.size(0)
     
-    output = prediction.new(1, prediction.size(2) + 1)
+    output = torch.zeros(1, 8)     # if there is nothing to detect successfully
     write = False
 
 
@@ -131,7 +131,7 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
         #Get the class having maximum score, and the index of that class
         #Get rid of num_classes softmax scores 
         #Add the class index and the class score of class having maximum score
-        max_conf, max_conf_score = torch.max(image_pred[:,5:5+ num_classes], 1)
+        max_conf, max_conf_score = torch.max(image_pred[:,5:5+ num_classes], 1)   # values, indexes
         max_conf = max_conf.float().unsqueeze(1)
         max_conf_score = max_conf_score.float().unsqueeze(1)
         seq = (image_pred[:,:5], max_conf, max_conf_score)
