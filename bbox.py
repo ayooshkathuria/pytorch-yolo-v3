@@ -36,13 +36,23 @@ def get_abs_coord(box):
     x2 = (box[0] + box[2]/2) - 1 
     y2 = (box[1] + box[3]/2) - 1
     return x1, y1, x2, y2
-    
 
 def center_to_corner(prediction):
+    """
+    Arguments
+    ---------
+    prediction : torch tensor
+        [batch, image_idx, [x_center, y_center, width, height]]
+
+    Returns
+    -------
+    prediction : torch.tensor
+        [batch, image_idx, [x_1, y_1, x_2, y_2]]
+    """
     prediction[:,:,0] = (prediction[:,:,0] - prediction[:,:,2]/2)
     prediction[:,:,1] = (prediction[:,:,1] - prediction[:,:,3]/2)
-    prediction[:,:,2] = (prediction[:,:,2] + prediction[:,:,0]) 
-    prediction[:,:,3] = (prediction[:,:,3] + prediction[:,:,1])
+    prediction[:,:,2] = (prediction[:,:,0] + prediction[:,:,2]/2) 
+    prediction[:,:,3] = (prediction[:,:,1] + prediction[:,:,3]/2)
     
     return prediction
 
@@ -54,6 +64,22 @@ def corner_to_center(prediction):
 
     return prediction
 
+def center_to_corner_2d(prediction):
+    """
+    Input
+    _____
+        x_c, y_c, width, height
+
+    Output
+    -----
+        left (x1), bottom (y1), right (x2), top (y2)
+    """
+    prediction[:,0] = (prediction[:,0] - prediction[:,2]/2)
+    prediction[:,1] = (prediction[:,1] - prediction[:,3]/2)
+    prediction[:,2] = (prediction[:,0] + prediction[:,2]/2)
+    prediction[:,3] = (prediction[:,1] + prediction[:,3]/2)
+    
+    return prediction
 
 def corner_to_center_2d(prediction):
     prediction[:,0] = (prediction[:,0] + prediction[:,2])/2

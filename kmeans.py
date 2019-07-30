@@ -1,107 +1,132 @@
-import pickle as pkl
-from cocoloader import transform_annotation
-import random
+"""
+Create anchors using Kmeans clustering on dataset.  Creates a text file
+to use during training.
+"""
+
 import numpy as np
-import matplotlib.pyplot as plt
+import argparse
 
 
+class YOLO_Kmeans:
+    def __init__(self, cluster_number, annot_file, out_file):
+        self.cluster_number = cluster_number
+        self.annot_file = annot_file
+        self.out_file = out_file
 
-def get_bbox_dims(coco_loader):
-    li = []
-    for x in coco_loader:
-        x = trasform_annotation(x)
-        bboxes = x[1]
-        bbox_dims_h = bboxes[:,3] - bboxes[:,1]
-        bbox_dims_w = bboxes[:,2] - bboxes[:,0]
-        
-    
-        bbox_dims = np.stack((bbox_dims_w, bbox_dims_h)).T
-        
-        li.append(bbox_dims)
+    def iou(self, boxes, clusters):  # 1 box -> k clusters
+        n = boxes.shape[0]
+        k = self.cluster_number
+
+        box_area = boxes[:, 0] * boxes[:, 1]
+        box_area = box_area.repeat(k)
+        box_area = np.reshape(box_area, (n, k))
+
+        cluster_area = clusters[:, 0] * clusters[:, 1]
+        cluster_area = np.tile(cluster_area, [1, n])
+        cluster_area = np.reshape(cluster_area, (n, k))
+
+        box_w_matrix = np.reshape(boxes[:, 0].repeat(k), (n, k))
+        cluster_w_matrix = np.reshape(np.tile(clusters[:, 0], (1, n)), (n, k))
+        min_w_matrix = np.minimum(cluster_w_matrix, box_w_matrix)
+
+        box_h_matrix = np.reshape(boxes[:, 1].repeat(k), (n, k))
+        cluster_h_matrix = np.reshape(np.tile(clusters[:, 1], (1, n)), (n, k))
+        min_h_matrix = np.minimum(cluster_h_matrix, box_h_matrix)
+        inter_area = np.multiply(min_w_matrix, min_h_matrix)
+
+        result = inter_area / (box_area + cluster_area - inter_area)
+        return result
+
+    def avg_iou(self, boxes, clusters):
+        accuracy = np.mean([np.max(self.iou(boxes, clusters), axis=1)])
+        return accuracy
+
+    def kmeans(self, boxes, k, dist=np.median):
+        box_number = boxes.shape[0]
+        distances = np.empty((box_number, k))
+        last_nearest = np.zeros((box_number,))
+        np.random.seed()
+        clusters = boxes[np.random.choice(
+            box_number, k, replace=False)]  # init k clusters
+        while True:
+
+            distances = 1 - self.iou(boxes, clusters)
+
+            current_nearest = np.argmin(distances, axis=1)
+            if (last_nearest == current_nearest).all():
+                break  # clusters won't change
+            for cluster in range(k):
+                clusters[cluster] = dist(  # update clusters
+                    boxes[current_nearest == cluster], axis=0)
+
+            last_nearest = current_nearest
+
+        return clusters
+
+    def result2txt(self, data):
+        f = open(self.out_file, 'w')
+        row = np.shape(data)[0]
+        for i in range(row):
+            if i == 0:
+                x_y = "%d,%d" % (data[i][0], data[i][1])
+            else:
+                x_y = ", %d,%d" % (data[i][0], data[i][1])
+            f.write(x_y)
+        f.close()
+
+    def txt2boxes(self):
+        f = open(self.annot_file, 'r')
+        dataSet = []
+        for line in f:
+            infos = line.split(" ")
+            length = len(infos)
+            for i in range(1, length):
+                width = int(infos[i].split(",")[2]) - \
+                    int(infos[i].split(",")[0])
+                height = int(infos[i].split(",")[3]) - \
+                    int(infos[i].split(",")[1])
+                dataSet.append([width, height])
+        result = np.array(dataSet)
+        f.close()
+        return result
+
+    def txt2clusters(self):
+        all_boxes = self.txt2boxes()
+        result = self.kmeans(all_boxes, k=self.cluster_number)
+        result = result[np.lexsort(result.T[0, None])]
+        self.result2txt(result)
+        print("K anchors:\n {}".format(result))
+        print("Accuracy: {:.2f}%".format(
+            self.avg_iou(all_boxes, result) * 100))
 
 
-    dims = np.vstack(li)
-    return dims 
+if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser(argument_default=argparse.SUPPRESS)
 
-a = pkl.load(open("Entire_dims.pkl", "rb"))
+    # Command line options
+    parser.add_argument(
+        '--num_clusters', type=int,
+        default=9,
+        help='Number of desired clusters or anchors'
+    )
 
+    # Command line options
+    parser.add_argument(
+        '--annot_file', type=str,
+        help='Annotations file name (list of images and bboxes)'
+    )
 
+    parser.add_argument(
+        '--out_file', type=str,
+        default="yolo_anchors_custom.txt",
+        help='Output file name'
+    )
 
-def YOLO_kmeans(points, num_k):
-    centroids = random.sample(range(points.shape[0]), num_k)
-    centroids = points[centroids]
+    args = parser.parse_args()
 
-    avg_ious = []
-    for iter in range(150):
-        clusters = get_clusters(points, centroids)
-        
-        for k in range(num_k):
-            arr = points[clusters == k]
-            centroids[k] = np.mean(arr, 0)
-            
-        ious = IOU_dist(points, centroids[clusters])
-        
-        
-        avg_iou = np.mean(ious)
-        
-        
-        avg_ious.append((avg_iou))
-    
-    
-    plt.plot((range(len(avg_ious))), avg_ious)
-    
-    plt.savefig("Avg_IOU.jpeg")
-    
-    plt.show()
-    
-    print(avg_ious[-1])
-    return centroids, clusters 
-            
-        
-        
-def IOU_dist(points, centroids):    
-    min_w  = np.minimum(points[:,0], centroids[:,0])
-    min_h  = np.minimum(points[:,1], centroids[:,1])
-    
-    a_points = points[:,0]*points[:,1]
-    c_points = centroids[:,0]*centroids[:,1] 
-
-    iou = (min_h*min_w)/(a_points + c_points - min_h*min_w)
-    
-    return iou
-        
-def get_clusters(points, centroids):
-    
-    points = points.reshape(points.shape[0], 1, points.shape[1]).transpose((0,2,1))
-    
-    centroids = centroids.reshape(centroids.shape[0], 1, centroids.shape[1])
-    centroids = centroids.transpose((1,2,0))
-    
-    print(centroids.shape)
-    print(points.shape)
-    iou = IOU_dist(points, centroids)
-    
-    dist = 1 - iou
-    
-    
-    clusters = np.argmin(dist, 1)
-
-    
-    
-    return  clusters
-
-num_k = 9
-
-color_dict = dict([(i, np.random.rand(3,)) for i in range(num_k)])
-
-
-
-b = YOLO_kmeans(a, num_k)
-
-colors = np.array(list(map(lambda x: color_dict[x], b[1])))
-
-plt.scatter(a[:,0], a[:,1], c = colors, s  = 0.001)
-plt.scatter(b[0][:,0], b[0][:,1], s = 15, c = "black")
-plt.savefig("kmeans.jpg")
-plt.show()
+    cluster_number = args.num_clusters
+    annot_file = args.annot_file
+    out_file = args.out_file
+    kmeans = YOLO_Kmeans(cluster_number, annot_file, out_file)
+    kmeans.txt2clusters()

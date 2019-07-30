@@ -1,3 +1,14 @@
+"""
+Evaluation script for PyTorch Darknet model.
+
+Evaluates the overlap between ground truth test labels and predicted labels
+on the same images.  If there is one box from the predictions of an image
+that overlaps by a user specifified threshhold, the true positive count is
+increased and Average Precision will be higher.
+
+If running on CPU-only, this script may be slow.
+"""
+
 from darknet import Darknet, get_test_input
 import torch
 import os
@@ -12,6 +23,8 @@ from bbox import center_to_corner
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import cv2
+import pickle as pkl
 
 
 random.seed(0)
@@ -29,6 +42,8 @@ def arg_parse():
     parser.add_argument("--weights", dest = 'weightsfile', help =
                         "weightsfile",
                         default = "yolov3.weights", type = str)
+    parser.add_argument("--overlap", dest="overlap_thresh", 
+                        help="Overlap threshhold", default=0.5)
 
     return parser.parse_args()
 
@@ -65,7 +80,6 @@ def nms(boxes, scores, overlap=0.5, top_k=200):
     w = boxes.new()
     h = boxes.new()
 
-    # keep = torch.Tensor()
     count = 0
     while idx.numel() > 0:
         i = idx[-1]  # index of current largest val
@@ -173,11 +187,15 @@ def custom_eval(predictions_all,
     image_num = len(ground_truths_all)
     tp = np.zeros(image_num)
     fp = np.zeros(image_num)
-    for i in range(image_num):
 
+    # For each image look for overlaps between ground truth and predictions
+    for i in range(image_num):
         predictions = predictions_all[i]
         ground_truths = ground_truths_all[i]
-        # Predictions
+        if len(predictions) == 0:
+            print('Prediction for image is emtpy.')
+            fp[i] = 1.
+            continue
         confidence = predictions[:, 4]
         BB = predictions[:, :4]
 
@@ -190,8 +208,8 @@ def custom_eval(predictions_all,
         nd = BB.shape[0]
         ngt = BBGT.shape[0]
 
-        # print(BB)
-        # print(BBGT)
+        print('BB number', BB.shape[0])
+        print('BBGT number', BBGT.shape[0], '\n')
         
         # Go down detections and ground truths and calc overlaps (IOUs)
         overlaps = []
@@ -199,8 +217,9 @@ def custom_eval(predictions_all,
             bb = BB[d]
             for gt in range(ngt):
                 bbox1 = torch.tensor(BBGT[np.newaxis, gt, :], dtype=torch.float)
-                bbox2 = torch.tensor(bb[np.newaxis, :], dtype=torch.float)
+                bbox2 = torch.tensor(bb[np.newaxis, :].clone().detach(), dtype=torch.float)
                 overlaps.append(bbox_iou(bbox1, bbox2))
+        # Get best IOU prediction/gt match
         ovmax = np.max(np.array(overlaps))
 
         # Mark TPs and FPs
@@ -216,37 +235,29 @@ def custom_eval(predictions_all,
     rec = tp / float(num_gts)
     # Avoid divide by zero
     prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
-    ap = average_precision(rec, prec)
+    ap = average_precision(rec, prec, use_07_metric=False)
 
     return rec, prec, ap
-
-def corner_to_center_1d(box):
-    box[0] = (box[0] + box[2])/2
-    
-    box[1] = (box[1] + box[3])/2
-    box[2] = 2*(box[2] - box[0])
-    box[3] = 2*(box[3] - box[1])
-
-    return box
 
 def center_to_corner_2d(boxes):
     boxes[:,0] = (boxes[:,0] - boxes[:,2]/2)
     boxes[:,1] = (boxes[:,1] - boxes[:,3]/2)
-    boxes[:,2] = (boxes[:,2] + boxes[:,0]) 
-    boxes[:,3] = (boxes[:,3] + boxes[:,1])
+    boxes[:,2] = (boxes[:,2]/2 + boxes[:,0]) 
+    boxes[:,3] = (boxes[:,3]/2 + boxes[:,1])
     
     return boxes
 
 if __name__ == "__main__":
     args = arg_parse()
+    overlap_thresh = float(args.overlap_thresh)
 
     # Instantiate a model
     model = Darknet(args.cfgfile, train=False)
 
     # Get model specs
-    inp_dim = int(model.net_info["height"])
-    assert inp_dim % 32 == 0 
-    assert inp_dim > 32
+    model_dim = int(model.net_info["height"])
+    assert model_dim % 32 == 0 
+    assert model_dim > 32
     num_classes = int(model.net_info["classes"])
     bbox_attrs = 5 + num_classes
 
@@ -259,7 +270,7 @@ if __name__ == "__main__":
     model.eval()
 
     # Load test data and resize only
-    transforms = Sequence([YoloResizeTransform(inp_dim)])
+    transforms = Sequence([YoloResizeTransform(model_dim)])
     test_data = CustomDataset(root="data", ann_file="data/test.txt", 
                               det_transforms=transforms,
                               num_classes=num_classes)
@@ -269,15 +280,22 @@ if __name__ == "__main__":
     predictions_all = []
     num_gts = 0
 
+    # Make a directory for the image files with their bboxes
+    img_file_sample = test_data.examples[0].rstrip()
+    eval_output_dir = img_file_sample.replace(img_file_sample.split(os.sep)[-2], 'eval_output')
+    eval_output_dir = eval_output_dir.replace(img_file_sample, '')
+    os.makedirs(eval_output_dir, exist_ok=True)
+
 #     for i, (img, target) in enumerate(test_loader):
     for i in range(len(test_data)):
-        img_file = test_data.examples[i]
+        img_file = test_data.examples[i].rstrip()
+
+
         print(i)
 
         # Read image and prepare for input to network
-        img_tmp, orig_im, orig_im_dim = prep_image(plt.imread(img_file.rstrip()), inp_dim)
-        im_dim = torch.FloatTensor(orig_im_dim).to(device)
-        print('im_dim ', im_dim)
+        img, orig_im, orig_dim = prep_image(plt.imread(img_file), model_dim)
+        orig_dim = torch.FloatTensor(orig_dim).repeat(1,2)
 
         # Read ground truth labels
         ground_truths_file = img_file.replace(img_file.split('.')[-1], 'txt')
@@ -286,43 +304,68 @@ if __name__ == "__main__":
                 header=None, sep=' '))
         except pd.errors.EmptyDataError:
             continue
-        ground_truths[:, 1:] = center_to_corner_2d(ground_truths[:, 1:] * orig_im_dim[0])
-        # ground_truths[:, 1:] = ground_truths[:, 1:] * orig_im_dim[0]
+        ground_truths[:, 1:] = center_to_corner_2d(ground_truths[:, 1:] * np.asarray(orig_dim[0]))
 
         class_labels = ground_truths[:, 0]
         # x1y1x2y2
         ground_truths = ground_truths[:, 1:]
         num_gts += ground_truths.shape[0]
         
-        img = img_tmp.to(device)
-        output = model(img)
-        output = center_to_corner(output)
+        img = img.to(device)
+        with torch.no_grad():
+            output = model(img)
+        # output = center_to_corner(output)
         
-        output = output.unsqueeze(0).view(-1, bbox_attrs)
-        # # Note:  does not work when we run nms
-        # keep = np.unique(np.asarray(nms(output, scores=output[:, 5], overlap=0.3)[0]))
+        # output = output.unsqueeze(0).view(-1, bbox_attrs)
+
+        # keep = np.unique(np.asarray(nms(output, scores=output[:, 5], overlap=0.3, top_k=10)[0]))
         # print('keep ', keep)
         # output = output[keep, :]
-        # print('output ', output)
-        score_box = output[:, 5]
-        print('score_box ', score_box)
 
-        # inp_dim is model input size, im_dim is actual image size
-
-        output = np.asarray(output.squeeze(0))
+        # # Convert to numpy
+        # output = np.asarray(output.squeeze(0))
         
         if output.shape[0] > 0:
-            # Get x1y1x2y2, mask conf, class conf
-            # Remember original image is square (or should be)
-            im_h = im_dim.cpu().numpy()[0]
-            output[:, 0] *= np.asarray(im_dim[0]/inp_dim)
-            output[:, 1] *= np.asarray(im_dim[1]/inp_dim)
-            output[:, 2] *= np.asarray(im_dim[0]/inp_dim)
-            output[:, 3] *= np.asarray(im_dim[1]/inp_dim)
+            # To later plot bboxes
+            img_ = plt.imread(img_file)
+            # # Get x1y1x2y2, mask conf, class conf
+            # # Remember original image is square (or should be)
+            # # Note:  inp_dim is model input size, im_dim is actual image size
+            # output[:, 0] *= np.asarray(im_dim[0]/inp_dim)
+            # output[:, 1] *= np.asarray(im_dim[1]/inp_dim)
+            # output[:, 2] *= np.asarray(im_dim[0]/inp_dim)
+            # output[:, 3] *= np.asarray(im_dim[1]/inp_dim)
 
+            output = write_results(output, 0.0, num_classes, model_dim, orig_dim.unsqueeze(0), nms=True, nms_conf=0.5)
+
+            # Scale
+            scaling_factor = torch.min(model_dim/orig_dim,1)[0].view(-1,1)
+            orig_dim = orig_dim.repeat(output.size(0), 1)
+            output[:,[1,3]] -= (model_dim - scaling_factor*orig_dim[:,0].view(-1,1))/2
+            output[:,[2,4]] -= (model_dim - scaling_factor*orig_dim[:,1].view(-1,1))/2
+            output[:,1:5] /= scaling_factor
+
+            outputs = []
+            for i in range(output.shape[0]):
+                output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, orig_dim[i,0])
+                output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, orig_dim[i,1])
+                if output[i,7] > 0.8:
+                    # Draw bounding boxes on test images
+                    colors = pkl.load(open("pallete", "rb"))
+                    c1 = tuple(final[[0,1]])
+                    c2 = tuple(final[[2,3]])                    
+                    cv2.rectangle(img_, c1, c2, color=colors[1], thickness=2)
+                final = np.asarray(output[i, 1:6], dtype=np.int32)
+                outputs.append(final)
+
+            # write image with bboxes to a new folder
+            plt.imsave(img_file.replace(img_file.split('.')[-1], '_out.jpg').replace(
+                img_file.split(os.sep)[-2], 'eval_output'), img_)
+
+            outputs = torch.tensor(outputs)
 
             ground_truths_all.append(ground_truths)
-            predictions_all.append(output)
+            predictions_all.append(outputs)
 
-    prec, rec, aps = custom_eval(predictions_all, ground_truths_all, num_gts=num_gts, ovthresh=0.3)
-    print(prec, rec, np.mean(aps))
+    prec, rec, aps = custom_eval(predictions_all, ground_truths_all, num_gts=num_gts, ovthresh=overlap_thresh)
+    print('Precision ', prec, 'Recall ', rec, 'Average precision ', np.mean(aps), sep='\n')

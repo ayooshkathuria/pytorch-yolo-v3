@@ -3,8 +3,7 @@ Training script for PyTorch Darknet model.
 
 e.g. python train.py --cfg cfg/yolov3-tiny-1xclass.cfg --weights yolov3-tiny.weights --datacfg data/obj.data
 
-Output prediction vector is [centre_x, centre_y, box_height, box_width, mask_confidence, class_confidence]
-
+Output prediction vector is [batch, centre_x, centre_y, box_height, box_width, mask_confidence, class_confidence]
 """
 
 import torch
@@ -25,14 +24,21 @@ from customloader import custom_transforms, CustomDataset
 import torch.optim as optim
 import torch.autograd.gradcheck
 from tensorboardX import SummaryWriter
-import sys 
+import sys
+import datetime
 
 
+# Folder to save checkpoints to
+SAVE_FOLDER = datetime.datetime.now().strftime("%B-%d-%Y-%I:%M%p")
+os.makedirs(os.path.join(os.getcwd(), 'runs', SAVE_FOLDER))
+
+# For tensorboard
 writer = SummaryWriter()
-
 random.seed(0)
 
+# Choose backend device for tensor operations - GPU or CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 def arg_parse():
     """
     Parse arguements to the detect module
@@ -46,7 +52,7 @@ def arg_parse():
                         "weightsfile",
                         default = "yolov3.weights", type = str)
     parser.add_argument("--datacfg", dest = "datafile", help = "cfg file containing the configuration for the dataset",
-                        type = str, default = "cfg/data.data")
+                        type = str, default = "data/obj.data")
     parser.add_argument("--lr", dest = "lr", type = float, default = 0.001)
     parser.add_argument("--mom", dest = "mom", type = float, default = 0)
     parser.add_argument("--wd", dest = "wd", type = float, default = 0)
@@ -59,48 +65,30 @@ args = arg_parse()
 
 #Load the model
 model = Darknet(args.cfgfile, train=True)
+model.load_weights(args.weightsfile)
 
-# "unfreeze" refers to the last number of layers to tune (allow gradients to be tracked)
-p_i = 1
-p_len = len(list(model.parameters()))
-unfreeze = args.unfreeze
-stop_layer = p_len - unfreeze
+# Unfreeze all but this number of layers at the beginning
+layers_length = len(list(model.parameters()))
+FINE_TUNE_STOP_LAYER = int(layers_length/1.3)
 
-model.load_weights(args.weightsfile, stop=stop_layer)
-
-# Freeze all weights before layer "stop_layer" from "unfreeze" argument
-for p in model.parameters():
-    if p_i < stop_layer:
-        p.requires_grad = False
-    else:
-        p.requires_grad = True
-    p_i += 1
-
-model.train()
+# Use CUDA device if availalbe and set to train
 model = model.to(device)
+model.train()
 
 # Load the config file
 net_options =  model.net_info
 
 ##Parse the config file
 batch = net_options['batch']
-subdivisions = net_options['subdivisions']  #Irrelavant for our implementation simnce we laod the entire batch into our RAM
-#In darknet, subdivisions would the number of examples loaded into the RAM at once (after being concatenated)
-channels = net_options['channels']
-momentum = net_options['momentum']
-decay = net_options['decay']    #Penalty for regularisation
 angle = net_options['angle']    #The angle with which you want to rotate images as a part of augmentation
-saturation = net_options['saturation']     #saturation related augmentation
-exposure = net_options['exposure']
-hue = net_options['hue']
-learning_rate = net_options['learning_rate']    #Initial learning rate
-burn_in = net_options['burn_in']
-#for the first n = burn_in steps, the learning rate used is ((steps/burn_in)**a)*learning_rate
-#where a is a hyperparameter that must be chosen. In the official darknet YOLO implementation, a = 4
-max_batches = net_options['max_batches']
-policy = net_options['policy']
-steps = net_options['steps']
-scales = net_options['scales']
+
+# For RandomHSV() augmentation (see data_aug.py)
+saturation = int(float(net_options['saturation'])*255)    #saturation related augmentation
+exposure = int(float(net_options['exposure'])*255)
+hue = int(float(net_options['hue'])*179)
+
+steps = int(net_options['steps'])
+# scales = net_options['scales']
 num_classes = net_options['classes']
 bs = net_options['batch']
 # Assume h == w
@@ -113,26 +101,9 @@ momentum = args.mom
 momentum = 0.9
 wd = 0.0005
 
-
 inp_dim = int(inp_dim)
 num_classes = int(num_classes)
 bs = int(bs)
-
-# Overloading custom data transforms from customloader (may add more here)
-custom_transforms = Sequence([YoloResizeTransform(inp_dim)])
-
-# Data instance and loader
-data = CustomDataset(root="data", num_classes=num_classes, 
-                     ann_file="data/train.txt", 
-                     det_transforms=custom_transforms)
-print('Batch size ', bs)
-data_loader = DataLoader(data, 
-                         batch_size=bs,
-                         shuffle=False,
-                         collate_fn=data.collate_fn)
-
-# Use this optimizer calculation for training loss
-optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=wd)
 
 def logloss(pred, target):
     assert pred.shape == target.shape, "Input and target must be the same shape"
@@ -168,7 +139,8 @@ def logloss(pred, target):
     return loss
     
 def YOLO_loss(ground_truth, output):
-
+    """Function to calculate loss based on predictions
+    and ground-truth labels"""
     total_loss = 0
     
     #get the objectness loss
@@ -176,7 +148,6 @@ def YOLO_loss(ground_truth, output):
     objectness_pred = output[loss_inds[:,0],loss_inds[:,1],4]
     target = ground_truth[loss_inds[:,0],loss_inds[:,1],4]
     objectness_loss = torch.nn.MSELoss(size_average=False)(objectness_pred, target)
-    print("Obj Loss", objectness_loss)
     #Only objectness loss is counted for all boxes
     object_box_inds = torch.nonzero(ground_truth[:,:,4] > 0).view(-1, 2)
 
@@ -190,10 +161,6 @@ def YOLO_loss(ground_truth, output):
     #get centre x and centre y 
     centre_x_loss = torch.nn.MSELoss(size_average=False)(pred_ob[:,0], gt_ob[:,0])
     centre_y_loss = torch.nn.MSELoss(size_average=False)(pred_ob[:,1], gt_ob[:,1])
-    
-    print("Num_gt:", gt_ob.shape[0])
-    print("Center_x_loss", float(centre_x_loss))
-    print("Center_y_loss", float(centre_y_loss))
 
     total_loss += centre_x_loss 
     total_loss += centre_y_loss 
@@ -204,10 +171,6 @@ def YOLO_loss(ground_truth, output):
     
     total_loss += w_loss 
     total_loss += h_loss 
-    
-    print("w_loss:", float(w_loss))
-    print("h_loss:", float(h_loss))
-
 
     #class_loss 
     # cls_scores_pred = pred_ob[:,5:]
@@ -226,75 +189,41 @@ def YOLO_loss(ground_truth, output):
         targ_labels[:,0] = 1 - targ_labels[:,0]
         cls_loss += torch.nn.CrossEntropyLoss(size_average=False)(targ_labels, cls_labels[:,c_n].long())
 
-    print(cls_loss)
     total_loss += cls_loss
 
     return total_loss
 
+### DATA ###
+
+# Overloading custom data transforms from customloader (may add more here)
+# custom_transforms = Sequence([RandomHSV(hue=hue, saturation=saturation, brightness=exposure), 
+#     YoloResizeTransform(inp_dim)])
+custom_transforms = Sequence([YoloResizeTransform(inp_dim)])
+
+# Data instance and loader
+data = CustomDataset(root="data", num_classes=num_classes, 
+                     ann_file="data/train.txt", 
+                     det_transforms=custom_transforms)
+print('Batch size ', bs)
+data_loader = DataLoader(data, 
+                         batch_size=bs,
+                         shuffle=True,
+                         collate_fn=data.collate_fn)
+
 ### TRAIN MODEL ###
+
+# Use this optimizer calculation for training loss
+optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=wd)
 
 itern = 0
 epochs = int(len(data) / bs)
-lr_update_step = 0.8 * epochs
-lr_updated = False
-for image, ground_truth in data_loader:
-    if len(ground_truth) == 0:
-        continue
+lr_update_step = epochs - 1
 
-    # # Track gradients in backprop
-    image = image.to(device)
-    ground_truth = ground_truth.to(device)
-    
-    output = model(image)
-
-    # Clear gradients from optimizer for next iteration
-    optimizer.zero_grad()
-
-    print("\n\n")
-    print('Iteration ', itern)
-
-    if (torch.isnan(ground_truth).any()):
-        print("Nans in Ground_truth")
-        assert False
-        
-    if (torch.isnan(output).any()):
-        print("Nans in Output")
-        assert False
-        
-    if (ground_truth == float("inf")).any() or (ground_truth == float("-inf")).any():
-        print("Inf in ground truth")
-        assert False
-        
-    
-    if (output == float("inf")).any() or (output == float("-inf")).any():
-        print("Inf in output")
-        assert False
-
-    loss  = YOLO_loss(ground_truth, output)
-    
-    # Update LR
-    for param_group in optimizer.param_groups:
-        if itern >= lr_update_step and lr_updated == False:
-            optimizer.param_groups[0]["lr"] = (lr*pow((itern / lr_update_step),4))
-            lr_updated = True
-    print('lr: ', optimizer.param_groups[0]["lr"])
-
-    if loss:
-        print("Loss for iter no: {}: {}".format(itern, float(loss)/bs))
-        writer.add_scalar("Loss/vanilla", float(loss), itern)
-        loss.backward()
-        optimizer.step()
-
-    itern += 1
-
-### FINE TUNE MODEL ON MORE LAYERS ###
-
-# "unfreeze" refers to the last number of layers to tune (allow gradients to be tracked)
+# "unfreeze" refers to the last number of layers to tune (allows gradients to be tracked)
 p_i = 1
-p_len = len(list(model.parameters()))
-stop_layer = 5 # Unfreeze all but this number of layers at the beginning
+print("Number of layers in network = {}".format(layers_length))
+stop_layer = layers_length - args.unfreeze # Unfreeze all but this number of layers at the beginning
 
-# Unfreeze more layers for fine-tuning
 for p in model.parameters():
     if p_i < stop_layer:
         p.requires_grad = False
@@ -302,78 +231,156 @@ for p in model.parameters():
         p.requires_grad = True
     p_i += 1
 
-# New iteration counter and make sure LR is set correctly
-itern_fine = 0
-lr = optimizer.param_groups[0]["lr"] / 10
-lr_updated = False
-optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=wd)
+for step in range(steps):
+    for image, ground_truth in data_loader:
+
+        if len(ground_truth) == 0:
+            continue
+
+        # # Track gradients in backprop
+        image = image.to(device)
+        ground_truth = ground_truth.to(device)
+        
+        output = model(image)
+
+        # Clear gradients from optimizer for next iteration
+        optimizer.zero_grad()
+
+        print("\n\n")
+        print('Iteration ', itern)
+
+        if (torch.isnan(ground_truth).any()):
+            print("Nans in Ground_truth")
+            assert False
+            
+        if (torch.isnan(output).any()):
+            print("Nans in Output")
+            assert False
+            
+        if (ground_truth == float("inf")).any() or (ground_truth == float("-inf")).any():
+            print("Inf in ground truth")
+            assert False
+            
+        if (output == float("inf")).any() or (output == float("-inf")).any():
+            print("Inf in output")
+            assert False
+
+        loss  = YOLO_loss(ground_truth, output)
+
+        if loss:
+            print("Loss for iter no: {0}: {1:.4f}".format(itern, float(loss)/bs))
+            writer.add_scalar("Loss/vanilla", float(loss), itern)
+            loss.backward()
+            optimizer.step()
+
+        print('lr: ', optimizer.param_groups[0]["lr"])
+
+        itern += 1
+
+    # Update LR for next epoch
+    for param_group in optimizer.param_groups:
+        if itern >= lr_update_step:
+            lr_update_step += itern
+            optimizer.param_groups[0]["lr"] = (lr*pow((itern / lr_update_step),4))
+            print('lr updated: ', optimizer.param_groups[0]["lr"])
+        
+
+# Save intermediate model in pytorch format (the state dictionary only, i.e. parameters only)
+torch.save(model.state_dict(), os.path.join('runs', SAVE_FOLDER, 
+    'epoch{0}-intermediate-bs{1}-loss{2:.4f}.pth'.format(itern, bs, float(loss)/bs))) 
+
+### DATA FOR FINE-TUNING ###
 
 # Reset data loader
-print('Batch size ', bs)
-# Data instance and loader
+# Data instance with transforms (augmentations) and PyTorch loader
 data = CustomDataset(root="data", num_classes=num_classes, 
                      ann_file="data/train.txt", 
                      det_transforms=custom_transforms)
 data_loader = DataLoader(data, batch_size=bs,
-                         shuffle=False,
+                         shuffle=True,
                          collate_fn=data.collate_fn)
 
-for image, ground_truth in data_loader:
-    if len(ground_truth) == 0:
-        continue
+### FINE TUNE MODEL ON MORE LAYERS ###
 
-    # # Track gradients in backprop
-    image = image.to(device)
-    ground_truth = ground_truth.to(device)
-    
-    output = model(image)
+# "unfreeze" refers to the last number of layers to tune (allow gradients to be tracked)
+p_i = 1
 
-    # Clear gradients from optimizer for next iteration
-    optimizer.zero_grad()
+# Unfreeze more layers (tensors holding weights) to fine-tune on network
+for p in model.parameters():
+    if p_i < FINE_TUNE_STOP_LAYER:
+        p.requires_grad = False
+    else:
+        p.requires_grad = True
+    p_i += 1
 
-    print("\n\n")
-    print('Iteration ', itern)
+# New iteration counter and make sure LR is set correctly
+# itern_fine = 0
+lr_update_step = epochs + itern - 1
+lr = optimizer.param_groups[0]["lr"] / 10
+# lr_updated = False
+optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=wd)
 
-    if (torch.isnan(ground_truth).any()):
-        print("Nans in Ground_truth")
-        assert False
+for step in range(steps):
+    for image, ground_truth in data_loader:
+        if len(ground_truth) == 0:
+            continue
+
+        # # Track gradients in backprop
+        image = image.to(device)
+        ground_truth = ground_truth.to(device)
         
-    if (torch.isnan(output).any()):
-        print("Nans in Output")
-        assert False
-        
-    if (ground_truth == float("inf")).any() or (ground_truth == float("-inf")).any():
-        print("Inf in ground truth")
-        assert False
-        
-    if (output == float("inf")).any() or (output == float("-inf")).any():
-        print("Inf in output")
-        assert False
+        output = model(image)
 
-    loss  = YOLO_loss(ground_truth, output)
-    
-    # Update learning rate (decrease) at lr_update_step specified above
+        # Clear gradients from optimizer for next iteration
+        optimizer.zero_grad()
+
+        print("\n\n")
+        print('Iteration ', itern)
+
+        if (torch.isnan(ground_truth).any()):
+            print("Nans in Ground_truth")
+            assert False
+            
+        if (torch.isnan(output).any()):
+            print("Nans in Output")
+            assert False
+            
+        if (ground_truth == float("inf")).any() or (ground_truth == float("-inf")).any():
+            print("Inf in ground truth")
+            assert False
+            
+        if (output == float("inf")).any() or (output == float("-inf")).any():
+            print("Inf in output")
+            assert False
+
+        loss  = YOLO_loss(ground_truth, output)
+        
+        if loss:
+            print("Loss for iter no: {0}: {1:.4f}".format(itern, float(loss)/bs))
+            writer.add_scalar("Loss/vanilla", float(loss), itern)
+            if itern % 10 == 0:
+                torch.save(model.state_dict(), os.path.join('runs', SAVE_FOLDER,
+                     'epoch{0}-bs{1}-loss{2:.4f}.pth'.format(itern, bs, float(loss)/bs)))
+            loss.backward()
+            optimizer.step()
+ 
+        print('lr: ', optimizer.param_groups[0]["lr"])
+
+        # itern_fine += 1
+        itern += 1
+
+    # Update LR for next epoch
     for param_group in optimizer.param_groups:
-        if itern_fine >= lr_update_step and lr_updated == False:
-            optimizer.param_groups[0]["lr"] = (lr*pow((itern_fine / lr_update_step),4))
-            lr_updated == True
-    
-    print('lr: ', optimizer.param_groups[0]["lr"])
-    if loss:
-        print("Loss for iter no: {}: {}".format(itern, float(loss)/bs))
-        writer.add_scalar("Loss/vanilla", float(loss), itern)
-        if itern_fine % 5 == 0:
-            torch.save(model.state_dict(), os.path.join('runs', 'epoch{0}-bs{1}-loss{2:.4f}.pth'.format(itern, bs, float(loss)/bs)))
-        loss.backward()
-        optimizer.step()
-
-    itern_fine += 1
-    itern += 1
+        if itern >= lr_update_step:
+            lr_update_step += itern
+            optimizer.param_groups[0]["lr"] = (lr*pow((itern / lr_update_step),4))
+            print('lr updated: ', optimizer.param_groups[0]["lr"])
 
 writer.close()
 
 # Save final model in pytorch format (the state dictionary only, i.e. parameters only)
-torch.save(model.state_dict(), os.path.join('runs', 'epoch{0}-final-bs{1}-loss{2:.4f}.pth'.format(itern, bs, float(loss)/bs)))    
+torch.save(model.state_dict(), os.path.join('runs', SAVE_FOLDER, 
+    'epoch{0}-final-bs{1}-loss{2:.4f}.pth'.format(itern, bs, float(loss)/bs)))    
     
     
 

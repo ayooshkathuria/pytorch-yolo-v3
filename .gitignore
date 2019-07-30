@@ -5,7 +5,7 @@ runs
 obj
 .DS_Store
 data*
-detection.png
+detection*
 
 
 

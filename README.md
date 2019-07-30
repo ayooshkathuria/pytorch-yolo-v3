@@ -1,29 +1,25 @@
 # A Fork of PyTorch Implemation of YOLOv3 to Accomodate Custom Data
 
-**This fork is a work in progress.  It will be noted here when this is ready for broader, more production, use.**
+**This fork is a work in progress.  It will be noted here when this is ready for broader, more production, use.  Issues are welcome.**
 
-Status (going well, main stuff done):
+## General Updates/Improvements
 
-* [x] Replace CUDA flag in lieu of the simple `tensor_xyz.to(device)` method
-* [x] Fix `customloader.py` to take multiple classes as an argument
-* [x] Add a custom collate function to `train.py` to detect empty boxes and exclude
-* [x] Fix resizing transform by creating a custom `YoloResize` transform called `YoloResizeTransform`
-* [x] Add finetuning to the `train.py` script
----
-* [ ] Fix the learning rate adjustment to decrease more consistently during training and finetuning
-* [ ] Fix `customloader.py` to take custom (as an argument) anchors, anchor numbers and model input dims
-* [ ] Ensure `live.py` is correctly drawing bounding boxes
-* [ ] Ensure this codebase works with full sized YOLOv3 network (only tested with the tiny architecture)
-* [ ] flake8 (clean up extra blank lines, long lines, etc.)
-* [ ] Remove `*` imports in place of explicit imports
+* User may bring custom data with a custom number of classes
+* Code cleaner and parameterized
+* Training has fine-tuning
+* For more details on updates and status of this fork, see notes at the bottom of the README.md
 
 _We love you COCO, but we have our own interests now._
 
-This project is a "You Only Look Once" v3 sample using PyTorch, a fork of https://github.com/ayooshkathuria/pytorch-yolo-v3, with updates and improvements specifically for the Tiny architecture on custom data labeled with VoTT (versus the classic download of VOC or COCO data and labels).  This fork allows the user to **bring their own dataset**.
+This project is a "You Only Look Once" v3 sample using PyTorch, a fork of https://github.com/ayooshkathuria/pytorch-yolo-v3, with updates and improvements specifically for architecture on custom data labeled with VoTT (versus the classic download of VOC or COCO data and pre-existing labels).  This fork allows the user to **bring their own dataset**.
 
 <img src="imgs/id_plumeria_sml.png" width="70%" align="center">
 
-Note:  This project is a work in progress.
+Important Notes
+--- 
+* This project is a work in progress.
+* Training is very sensitive to LR and LR decreases (please be aware and watch out for this).
+* The example config files are 2 classes, see below on how to change the numbe of classes.
 
 ## Setup
 
@@ -32,23 +28,24 @@ Note:  This project is a work in progress.
 
 ## Collect and Label Data
 
-1. Use the [VoTT](https://github.com/Microsoft/VoTT) labeling tool to create bounding boxes around objects of interest in images and export to YOLO format.  The `data` output folder should be a subdirectory here with the images, labels and pointer file.
+1. Use the <a href="https://github.com/Microsoft/VoTT" target="_blank">VoTT</a> labeling tool to create bounding boxes around objects of interest in images and export to YOLO format.  The `data` output folder should be a subdirectory here with the images, labels and pointer file.
 2. If you wish to train on all labeled images, make sure they are all in the `train.txt` file (this is read by the `customloader.py`).
 
-## Train
-
+## Train Model
 
 ### Modifications for Custom
 
-**Filters**
+**Filters and Classes**
 
-Ensure the `yolov3-tiny.cfg` is set up to train (see first lines of file).  Note, the number of classes will affect the last convolutional layer filter numbers (conv layers before the yolo layer) as well as the yolo layers themselves - so **will need to be modified manually** to suit the needs of the user.
+Ensure the `yolov3-tiny.cfg` or `yolov3.cfg` is set up correctly.  Note, the number of classes will affect the last convolutional layer filter numbers (conv layers before the yolo layer) as well as the yolo layers themselves - so **will need to be modified manually** to suit the needs of the user.
 
-Modify the filter number of the CNN layer directly before each [yolo] layer to be:  `filters=(classes + 5)x3`.  So, if `classes=1` then should be `filters=18`. If `classes=2` then write `filters=21`, and so on.
+Change the number of classes appropriately (e.g. `classes=2`).
+
+Modify the filter number of the CNN layer directly before each [yolo] layer to be:  `filters=`, then calculate (classes + 5)x3, and place after.  So, if `classes=1` then should be `filters=18`. If `classes=2` then write `filters=21`, and so on.
 
 **Anchors**
 
-The tiny architecture has 6 anchors, whereas, the non-tiny or full sized YOLOv3 architecture has 9 anchors.  These anchors should be manually discovered with `kmeans.py` and specified in the `cfg` file. 
+The tiny architecture has 6 anchors, whereas, the non-tiny or full sized YOLOv3 architecture has 9 anchors.  These anchors should be manually discovered with `kmeans.py` and specified in the `cfg` file.
 
 **Additional Instructions**
 
@@ -67,19 +64,21 @@ data/obj/482535.JPG
 data/obj/483510.JPG
 ```
 
-### Run
+* To update the number of layers that are tracking gradients for fine-tuning, at the beginning of the `train.py` script, update the default `FINE_TUNE_STOP_LAYER`.
 
-Cmd (this will be for one-class detector):
+### Run Training
 
-    python train.py --cfg cfg/yolov3-tiny.cfg --weights yolov3-tiny.weights --datacfg data/obj.data
+Cmd example:
+
+    python train.py --cfg cfg/yolov3-2class.cfg --weights yolov3.weights --datacfg data/obj.data --lr 0.0005 --unfreeze 2
 
 Usage:
 
     python train.py --help
 
-## Demo
+## Inference
 
-Here, you will use your trained model in a live video feed.  Ensure the `yolov3-tiny.cfg` is set up to test (see first lines of file).  `runs` is where trained models get saved by default.
+Here, you will use your trained model for evaluation on test data and a live video analysis.  The folder `runs` is where trained models get saved by default under a date folder.
 
 **Additional Instructions**
 
@@ -96,21 +95,25 @@ data/obj/483303.JPG
 data/obj/483326.JPG
 ```
 
-### Run
+### Evaluation
 
-Cmd:
+Cmd example:
+
+    python eval.py --cfg cfg/yolov3-2class.cfg --weights runs/<your trained model>.pth --overlap 0.3
+
+Usage:
+
+    python eval.py --help
+
+### Run Video Detection
+
+Cmd example:
 
     python live.py --cfg cfg/yolov3-tiny.cfg --weights runs/<your trained model>.pth --datacfg data/obj.data --confidence 0.6
 
 Usage:
     
     python live.py --help
-
-
-## Updates/Improvements
-
-* Custom data possibility
-* Clean up of several portions of code and generalizing/parameterizing
 
 ## Helpful Definitions
 
@@ -127,3 +130,23 @@ Usage:
 - IOU:  intersection over union between predicted bounding boxes and ground truth boxes
 
 **The original YOLOv3 paper by Joseph Redmon and Ali Farhadi:  https://arxiv.org/pdf/1804.02767.pdf**
+
+Updates to original codebase
+---
+* [x] Made it possible to bring any image data for object detection with `customloader.py` (using <a href="https://github.com/Microsoft/VoTT" target="_blank">VoTT</a> to label)
+* [x] Replace CUDA flag in lieu of the simple `tensor_xyz.to(device)` method
+* [x] Fix `customloader.py` to take multiple classes as a parameter in config file (e.g. `yolov3-2class.cfg`)
+* [x] Add a custom collate function to `train.py` to detect empty boxes and exclude
+* [x] Fix resizing transform by creating a custom `YoloResize` transform called `YoloResizeTransform`
+* [x] Add finetuning to the `train.py` script
+* [x] Fix the learning rate adjustment to decrease more consistently during training and finetuning
+* [x] Created method to find optimal anchor box sizes with `kmeans.py` and a script to temporarily convert labels `scripts/convert_labels.py` (the converted labels are only used for calculating anchor values)
+* [x] Ensure this codebase works with full sized YOLOv3 network
+---
+* [ ] Checkpoint only models with better loss values than previous ones (use checkpoint functionality in PyTorch)
+* [ ] Fix `customloader.py` to take custom (as an argument) anchors, anchor numbers and model input dims
+* [ ] Ensure `live.py` is correctly drawing bounding boxes
+* [ ] Ensure `eval.py` is correctly evaluating predictions
+* [ ] flake8 (clean up extra blank lines, long lines, etc.)
+* [ ] Remove `*` imports in place of explicit imports
+* [ ] Clean up unnecessary params in config files

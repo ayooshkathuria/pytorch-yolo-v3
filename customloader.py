@@ -22,15 +22,14 @@ custom_transforms = Sequence([ RandomHSV(), YoloResize(inp_dim)])
 
 random.seed(0)
 
-def transform_annotation(image, x):
+def transform_annotation(x):
     """Convert the annotation/target boxes to a format understood by
     dataset class"""
-    #convert the PIL image to a numpy array
     if not x:
         return None
     boxes = np.array([a.rstrip().split(' ') for a in x], dtype='float32')
     
-    #get the bounding boxes and convert them into proper format
+    # get the bounding boxes and convert them into proper format
     boxes = boxes[:, 1:]
     boxes = np.array(boxes)
     boxes = boxes.reshape(-1,4)
@@ -38,7 +37,7 @@ def transform_annotation(image, x):
     category_ids = np.array(boxes[:,0]).reshape(-1,1)
     ground_truth = np.concatenate([boxes, category_ids], 1).reshape(-1,5)
   
-    return image, ground_truth
+    return ground_truth
 
 
 class CustomDataset(Dataset):
@@ -54,10 +53,12 @@ class CustomDataset(Dataset):
 
         # The following, user needs to modify (TODO - create from args)
         self.inp_dim = 416
-        self.strides = [32,16]
-        self.anchor_nums = [3,3]
+        self.strides = [32,16,8]
+        self.anchor_nums = [3,3,3]
         self.num_classes = num_classes
-        self.anchors = [[10,14],  [23,27],  [37,58],  [81,82],  [135,169],  [344,319]]
+        # self.anchors = [[10,14],  [23,27],  [37,58],  [81,82],  [135,169],  [344,319]]
+        # self.anchors = [[116,78], [122,181], [243,38], [337,256], [486,458], [492,42], [605,162], [669,100], [1272,189]]
+        self.anchors = [[151,94], [260,280], [346,178], [727,653], [742,388], [802,119], [1031,632], [1272,424], [1353,745]]
         
         self.anchors = np.array(self.anchors)[::-1]
         
@@ -239,6 +240,11 @@ class CustomDataset(Dataset):
         return label_map
 
     def __getitem__(self, idx):
+        """Get image and ground truth bounding boxes.
+
+        The image is converted to PyTorch tensor.
+        The bounding boxes are converted to x_c, y_c, w, h (the VoTT YOLO default format)
+        """
         example = self.examples[idx]
 
         path = os.path.join(os.getcwd(), example).rstrip()
@@ -250,15 +256,7 @@ class CustomDataset(Dataset):
         #seperate images, boxes and class_ids
         ground_truth = None
         with open(example.replace(example.split('.')[-1], 'txt')) as f:
-            ground_truth = transform_annotation(image, f.readlines())
-
-        # if ground_truth is None:
-        #     #Convert the cv2 image into a PyTorch 
-        #     image = image.transpose(2,0,1)/255.0
-        #     image = torch.Tensor(image)
-        #     ground_truth_map = torch.Tensor(label_table)
-        #     print('ground_truth was None')
-        #     return image, []
+            ground_truth = transform_annotation(f.readlines())
 
         self.debug_id = example
         #apply the augmentations to the image and the bounding boxes
@@ -266,7 +264,7 @@ class CustomDataset(Dataset):
             image, ground_truth = self.det_transforms(image, ground_truth)
         im = image.copy()
 
-        #Convert the cv2 image into a PyTorch 
+        #Convert the cv2 image into a PyTorch tensor
         image = image.transpose(2,0,1)/255.0
         image = torch.Tensor(image)
             
@@ -289,7 +287,7 @@ class CustomDataset(Dataset):
 
             ground_truth_map = torch.Tensor(ground_truth_map)
         else:
-            ground_truth_map = torch.zeros((0, 6), dtype=torch.float) #torch.Tensor(label_table)
+            ground_truth_map = torch.zeros((0, 6), dtype=torch.float)
 
         return image, ground_truth_map
 
