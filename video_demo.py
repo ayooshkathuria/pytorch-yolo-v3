@@ -65,7 +65,7 @@ def arg_parse():
    
     parser.add_argument("--video", dest = 'video', help = 
                         "Video to run detection upon",
-                        default = "video.avi", type = str)
+                        default = "video.mp4", type = str)
     parser.add_argument("--dataset", dest = "dataset", help = "Dataset on which the network has been trained", default = "pascal")
     parser.add_argument("--confidence", dest = "confidence", help = "Object Confidence to filter predictions", default = 0.5)
     parser.add_argument("--nms_thresh", dest = "nms_thresh", help = "NMS Threshhold", default = 0.4)
@@ -88,10 +88,11 @@ if __name__ == '__main__':
     start = 0
 
     CUDA = torch.cuda.is_available()
+    
+    device = torch.device("cuda:0" if CUDA else "cpu")
 
     num_classes = 80
 
-    CUDA = torch.cuda.is_available()
     
     bbox_attrs = 5 + num_classes
     
@@ -105,10 +106,8 @@ if __name__ == '__main__':
     assert inp_dim % 32 == 0 
     assert inp_dim > 32
 
-    if CUDA:
-        model.cuda()
-        
-    model(get_test_input(inp_dim, CUDA), CUDA)
+    model = model.to(device)
+    
 
     model.eval()
     
@@ -126,17 +125,15 @@ if __name__ == '__main__':
         if ret:
             
 
-            img, orig_im, dim = prep_image(frame, inp_dim)
+            img, orig_im, im_dim = prep_image(frame, inp_dim)
             
-            im_dim = torch.FloatTensor(dim).repeat(1,2)                        
+            im_dim = torch.FloatTensor(im_dim).to(device)                    
             
             
-            if CUDA:
-                im_dim = im_dim.cuda()
-                img = img.cuda()
+            img = img.to(device)
             
             with torch.no_grad():   
-                output = model(Variable(img), CUDA)
+                output = model(Variable(img))
             output = write_results(output, confidence, num_classes, nms = True, nms_conf = nms_thesh)
 
             if type(output) == int:
@@ -151,17 +148,18 @@ if __name__ == '__main__':
             
 
             
-            im_dim = im_dim.repeat(output.size(0), 1)
-            scaling_factor = torch.min(inp_dim/im_dim,1)[0].view(-1,1)
-            
-            output[:,[1,3]] -= (inp_dim - scaling_factor*im_dim[:,0].view(-1,1))/2
-            output[:,[2,4]] -= (inp_dim - scaling_factor*im_dim[:,1].view(-1,1))/2
-            
-            output[:,1:5] /= scaling_factor
-    
-            for i in range(output.shape[0]):
-                output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, im_dim[i,0])
-                output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, im_dim[i,1])
+            output = de_letter_box(output, im_dim, inp_dim)
+#            im_dim = im_dim.repeat(output.size(0), 1)
+#            scaling_factor = torch.min(inp_dim/im_dim,1)[0].view(-1,1)
+#            
+#            output[:,[1,3]] -= (inp_dim - scaling_factor*im_dim[:,0].view(-1,1))/2
+#            output[:,[2,4]] -= (inp_dim - scaling_factor*im_dim[:,1].view(-1,1))/2
+#            
+#            output[:,1:5] /= scaling_factor
+#    
+#            for i in range(output.shape[0]):
+#                output[i, [1,3]] = torch.clamp(output[i, [1,3]], 0.0, im_dim[i,0])
+#                output[i, [2,4]] = torch.clamp(output[i, [2,4]], 0.0, im_dim[i,1])
             
             classes = load_classes('data/coco.names')
             colors = pkl.load(open("pallete", "rb"))

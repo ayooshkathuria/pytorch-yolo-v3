@@ -1,6 +1,6 @@
 
 from __future__ import division
-
+import random
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F 
@@ -9,6 +9,9 @@ import numpy as np
 import cv2 
 import matplotlib.pyplot as plt
 from bbox import bbox_iou
+import pandas as pd
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters())
@@ -22,7 +25,7 @@ def convert2cpu(matrix):
     else:
         return matrix
 
-def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
+def predict_transform(prediction, inp_dim, anchors, num_classes):
     batch_size = prediction.size(0)
     stride =  inp_dim // prediction.size(2)
     grid_size = inp_dim // stride
@@ -49,22 +52,18 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
     grid_len = np.arange(grid_size)
     a,b = np.meshgrid(grid_len, grid_len)
     
-    x_offset = torch.FloatTensor(a).view(-1,1)
-    y_offset = torch.FloatTensor(b).view(-1,1)
+    x_offset = torch.FloatTensor(a).view(-1,1).to(device)
+    y_offset = torch.FloatTensor(b).view(-1,1).to(device)
     
-    if CUDA:
-        x_offset = x_offset.cuda()
-        y_offset = y_offset.cuda()
+
     
     x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,num_anchors).view(-1,2).unsqueeze(0)
     
     prediction[:,:,:2] += x_y_offset
       
     #log space transform height and the width
-    anchors = torch.FloatTensor(anchors)
-    
-    if CUDA:
-        anchors = anchors.cuda()
+    anchors = torch.FloatTensor(anchors).to(device)
+
     
     anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
     prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
@@ -217,7 +216,7 @@ Created on Sat Mar 24 00:12:16 2018
 @author: ayooshmac
 """
 
-def predict_transform_half(prediction, inp_dim, anchors, num_classes, CUDA = True):
+def predict_transform_half(prediction, inp_dim, anchors, num_classes):
     batch_size = prediction.size(0)
     stride =  inp_dim // prediction.size(2)
 
@@ -241,22 +240,18 @@ def predict_transform_half(prediction, inp_dim, anchors, num_classes, CUDA = Tru
     grid_len = np.arange(grid_size)
     a,b = np.meshgrid(grid_len, grid_len)
     
-    x_offset = torch.FloatTensor(a).view(-1,1)
-    y_offset = torch.FloatTensor(b).view(-1,1)
+    x_offset = torch.FloatTensor(a).view(-1,1).to(device)
+    y_offset = torch.FloatTensor(b).view(-1,1).to(device)
     
-    if CUDA:
-        x_offset = x_offset.cuda().half()
-        y_offset = y_offset.cuda().half()
+
     
     x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,num_anchors).view(-1,2).unsqueeze(0)
     
     prediction[:,:,:2] += x_y_offset
       
     #log space transform height and the width
-    anchors = torch.HalfTensor(anchors)
+    anchors = torch.HalfTensor(anchors).to(device)
     
-    if CUDA:
-        anchors = anchors.cuda()
     
     anchors = anchors.repeat(grid_size*grid_size, 1).unsqueeze(0)
     prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4])*anchors
@@ -379,3 +374,42 @@ def write_results_half(prediction, confidence, num_classes, nms = True, nms_conf
                 output = torch.cat((output,out))
     
     return output
+
+
+def writer(x, results, classes, colors):
+    c1 = tuple(x[1:3].int())
+    c2 = tuple(x[3:5].int())
+    img = results[int(x[0])]
+    cls = int(x[-1])
+    label = "{0}".format(classes[cls])
+    color = random.choice(colors)
+    cv2.rectangle(img, c1, c2,color, 1)
+    t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1 , 1)[0]
+    c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
+    cv2.rectangle(img, c1, c2,color, -1)
+    cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
+    return img
+
+def de_letter_box(prediction, im_dim_list, inp_dim):
+    im_dim_list = im_dim_list.view(-1,2)
+    im_dim_list = torch.index_select(im_dim_list, 0, prediction[:,0].long())
+    im_dim_list = im_dim_list.float()
+    scaling_factor = torch.min(inp_dim/im_dim_list,1)[0].view(-1,1)
+    
+    prediction[:,[1,3]] -= (inp_dim - scaling_factor*im_dim_list[:,0].view(-1,1))/2
+    prediction[:,[2,4]] -= (inp_dim - scaling_factor*im_dim_list[:,1].view(-1,1))/2
+    
+    prediction[:,1:5] /= scaling_factor
+    
+    for i in range(prediction.shape[0]):
+        prediction[i, [1,3]] = torch.clamp(prediction[i, [1,3]], 0.0, im_dim_list[i,0])
+        prediction[i, [2,4]] = torch.clamp(prediction[i, [2,4]], 0.0, im_dim_list[i,1])
+        
+    return prediction
+
+def write_preds(prediction, batch_imlist, save_dir, classes, colors):
+    orig_ims = [cv2.imread(im) for im in batch_imlist]
+    list(map(lambda x: writer(x, orig_ims, classes, colors), prediction))
+    det_names = pd.Series(batch_imlist).apply(lambda x: "{}/det_{}".format(save_dir,x.split("/")[-1]))
+    list(map(cv2.imwrite, det_names, orig_ims))
+    
