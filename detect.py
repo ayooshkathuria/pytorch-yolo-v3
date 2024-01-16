@@ -231,6 +231,8 @@ if __name__ ==  '__main__':
             output = prediction
             write = 1
         else:
+            if(prediction.size(1)!=8):
+                continue
             output = torch.cat((output,prediction))
             
         
@@ -239,6 +241,7 @@ if __name__ ==  '__main__':
         for im_num, image in enumerate(imlist[i*batch_size: min((i +  1)*batch_size, len(imlist))]):
             im_id = i*batch_size + im_num
             objs = [classes[int(x[-1])] for x in output if int(x[0]) == im_id]
+            print(i, ": ")
             print("{0:20s} predicted in {1:6.3f} seconds".format(image.split("/")[-1], (end - start)/batch_size))
             print("{0:20s} {1:s}".format("Objects Detected:", " ".join(objs)))
             print("----------------------------------------------------------")
@@ -281,10 +284,14 @@ if __name__ ==  '__main__':
     
     draw = time.time()
 
-
+    # 用于显示所有的框都生成之后的图片
+    img_count = output[:,0].squeeze()
+    i = 0
     def write(x, batches, results):
-        c1 = tuple(x[1:3].int())
-        c2 = tuple(x[3:5].int())
+        global i
+        i+=1
+        c1 = tuple(map(int, x[1:3].cpu().numpy()))
+        c2 = tuple(map(int, x[3:5].cpu().numpy()))
         img = results[int(x[0])]
         cls = int(x[-1])
         label = "{0}".format(classes[cls])
@@ -294,11 +301,18 @@ if __name__ ==  '__main__':
         c2 = c1[0] + t_size[0] + 3, c1[1] + t_size[1] + 4
         cv2.rectangle(img, c1, c2,color, -1)
         cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
+        try:
+            if(int(x[0]) != img_count[i]):
+                cv2.imshow(" test ",img)
+                cv2.waitKey(0)
+        except:
+            cv2.imshow(" test ",img)
+            cv2.waitKey(0)
         return img
     
             
     list(map(lambda x: write(x, im_batches, orig_ims), output))
-      
+    
     det_names = pd.Series(imlist).apply(lambda x: "{}/det_{}".format(args.det,x.split("/")[-1]))
     
     list(map(cv2.imwrite, det_names, orig_ims))

@@ -44,10 +44,10 @@ def parse_cfg(cfgfile):
     """
     file = open(cfgfile, 'r')
     lines = file.read().split('\n')     #store the lines in a list
-    lines = [x for x in lines if len(x) > 0] #get read of the empty lines 
-    lines = [x for x in lines if x[0] != '#']  
-    lines = [x.rstrip().lstrip() for x in lines]
-
+    lines = [x for x in lines if len(x) > 0] #get rid of the empty lines 
+    lines = [x for x in lines if x[0] != '#']  #get rid of the comments
+    lines = [x.rstrip().lstrip() for x in lines] # rstrip() to remove the whitespace in the far right
+                                                 # lstrip  to remove the whitespace in the far left
     
     block = {}
     blocks = []
@@ -231,7 +231,7 @@ def create_modules(blocks):
             module.add_module("route_{0}".format(index), route)
             
             
-            
+            # 正确的end < 0, 否则就是只有start
             if end < 0:
                 filters = output_filters[index + start] + output_filters[index + end]
             else:
@@ -259,7 +259,7 @@ def create_modules(blocks):
         #Yolo is the detection layer
         elif x["type"] == "yolo":
             mask = x["mask"].split(",")
-            mask = [int(x) for x in mask]
+            mask = [int(x) for x in mask] #convert datatype from "string" to "int"
             
             
             anchors = x["anchors"].split(",")
@@ -282,7 +282,7 @@ def create_modules(blocks):
         output_filters.append(filters)
         index += 1
         
-    
+        # print(module)
     return (net_info, module_list)
 
 
@@ -305,6 +305,7 @@ class Darknet(nn.Module):
 
                 
     def forward(self, x, CUDA):
+        
         detections = []
         modules = self.blocks[1:]
         outputs = {}   #We cache the outputs for the route layer
@@ -351,12 +352,13 @@ class Darknet(nn.Module):
             elif module_type == 'yolo':        
                 
                 anchors = self.module_list[i][0].anchors
+
                 #Get the input dimensions
                 inp_dim = int (self.net_info["height"])
-                
+
                 #Get the number of classes
                 num_classes = int (modules[i]["classes"])
-                
+
                 #Output the result
                 x = x.data
                 x = predict_transform(x, inp_dim, anchors, num_classes, CUDA)
@@ -432,7 +434,7 @@ class Darknet(nn.Module):
                     bn_running_var = torch.from_numpy(weights[ptr: ptr + num_bn_biases])
                     ptr  += num_bn_biases
                     
-                    #Cast the loaded weights into dims of model weights. 
+                    # Cast the loaded weights into dims of model weights. 
                     bn_biases = bn_biases.view_as(bn.bias.data)
                     bn_weights = bn_weights.view_as(bn.weight.data)
                     bn_running_mean = bn_running_mean.view_as(bn.running_mean)
@@ -518,12 +520,22 @@ class Darknet(nn.Module):
                
 
 
+if __name__ == '__main__':
+
+    # blocks = parse_cfg("cfg/yolov3.cfg")
+    # create_modules(blocks)
+    # print(create_modules(blocks))
+    # #
+
+    
+    model = Darknet("cfg/yolov3.cfg")
+    inp = get_test_input()
+    pred = model(inp, torch.cuda.is_available())
+    print (pred) # (1, 10647, 85)   10647 = 13*13*3 + 26*26*3 + 52*52*3  85 = 4+1+80
 
 
-#
-#dn = Darknet('cfg/yolov3.cfg')
-#dn.load_weights("yolov3.weights")
-#inp = get_test_input()
-#a, interms = dn(inp)
-#dn.eval()
-#a_i, interms_i = dn(inp)
+    # dn.load_weights("yolov3.weights")
+    # inp = get_test_input()
+    # a, interms = dn(inp, torch.device('cuda'))
+    # dn.eval()
+    # a_i, interms_i = dn(inp)

@@ -42,8 +42,10 @@ def prep_image(img, inp_dim):
     return img_, orig_im, dim
 
 def write(x, img):
-    c1 = tuple(x[1:3].int())
-    c2 = tuple(x[3:5].int())
+    c1 = tuple(map(int, x[1:3].cpu().numpy()))
+    c2 = tuple(map(int, x[3:5].cpu().numpy()))
+    # c1 = tuple(x[1:3].int())
+    # c2 = tuple(x[3:5].int())
     cls = int(x[-1])
     label = "{0}".format(classes[cls])
     color = random.choice(colors)
@@ -112,7 +114,9 @@ if __name__ == '__main__':
 
     model.eval()
     
-    videofile = args.video
+    # videofile = args.video
+
+    videofile = 'centerCamera.avi'
     
     cap = cv2.VideoCapture(videofile)
     

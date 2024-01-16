@@ -23,18 +23,21 @@ def convert2cpu(matrix):
         return matrix
 
 def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
+    # CUDA = False
     batch_size = prediction.size(0)
-    stride =  inp_dim // prediction.size(2)
-    grid_size = inp_dim // stride
-    bbox_attrs = 5 + num_classes
-    num_anchors = len(anchors)
-    
+    stride =  inp_dim // prediction.size(2)  # 320//13=24
+    grid_size = prediction.size(2)   # 320//24=13  
+    bbox_attrs = 5 + num_classes  # 85
+    num_anchors = len(anchors)  # 3
+    # 可以理解为图像缩放系数
     anchors = [(a[0]/stride, a[1]/stride) for a in anchors]
 
 
-
+    # batch_size, 85*3, 10*10 
     prediction = prediction.view(batch_size, bbox_attrs*num_anchors, grid_size*grid_size)
+    # 第2维和第3维进行交换，确保结果张量在内存中是连续存储
     prediction = prediction.transpose(1,2).contiguous()
+    # batch_size, 10*10*3, 85
     prediction = prediction.view(batch_size, grid_size*grid_size*num_anchors, bbox_attrs)
 
 
@@ -55,6 +58,7 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
     if CUDA:
         x_offset = x_offset.cuda()
         y_offset = y_offset.cuda()
+        prediction = prediction.cuda()
     
     x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1,num_anchors).view(-1,2).unsqueeze(0)
     
@@ -74,7 +78,7 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA = True):
 
     prediction[:,:,:4] *= stride
    
-    
+    # prediction.to('cpu')
     return prediction
 
 def load_classes(namesfile):
@@ -102,7 +106,7 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
     
 
     try:
-        ind_nz = torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()
+        ind_nz = torch.nonzero(prediction[:,:,4]).transpose(0,1).contiguous()  # 有什么用？ 为什么shape是(2, 6)
     except:
         return 0
     
@@ -115,15 +119,17 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
     prediction[:,:,:4] = box_a[:,:,:4]
     
 
-    
+    # prediction.shape = (1, 10647, 85)
     batch_size = prediction.size(0)
     
+    # output.shape = (1, 86)
     output = prediction.new(1, prediction.size(2) + 1)
     write = False
 
 
     for ind in range(batch_size):
         #select the image from the batch
+        # image_pred.shape = (10647, 85)
         image_pred = prediction[ind]
         
 
@@ -131,23 +137,29 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
         #Get the class having maximum score, and the index of that class
         #Get rid of num_classes softmax scores 
         #Add the class index and the class score of class having maximum score
+        # max_conf.shape = (10647) 
+        # max_conf_score.shape = (10647)
         max_conf, max_conf_score = torch.max(image_pred[:,5:5+ num_classes], 1)
-        max_conf = max_conf.float().unsqueeze(1)
-        max_conf_score = max_conf_score.float().unsqueeze(1)
+        # max_conf.shape = (10647, 1) 
+        # max_conf_score.shape = (10647, 1)
+        max_conf = max_conf.float().unsqueeze(1) # shape?
+        max_conf_score = max_conf_score.float().unsqueeze(1) # shape?
         seq = (image_pred[:,:5], max_conf, max_conf_score)
+        # image_pred.shape = (10647, 7)
         image_pred = torch.cat(seq, 1)
         
 
         
         #Get rid of the zero entries
+        # non_zero_ind.shape = (15, 1)
         non_zero_ind =  (torch.nonzero(image_pred[:,4]))
 
-        
-        image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)
+        # image_pred_.shape = (15, 7)  15代表铆框confidence>0.5的框
+        image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)  # shape?
         
         #Get the various classes detected in the image
         try:
-            img_classes = unique(image_pred_[:,-1])
+            img_classes = unique(image_pred_[:,-1]) # 1, 7, 16
         except:
              continue
         #WE will do NMS classwise
@@ -157,13 +169,13 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
             class_mask_ind = torch.nonzero(cls_mask[:,-2]).squeeze()
             
 
-            image_pred_class = image_pred_[class_mask_ind].view(-1,7)
+            image_pred_class = image_pred_[class_mask_ind].view(-1,7)  #  (4, 7)
 
 		
         
              #sort the detections such that the entry with the maximum objectness
              #confidence is at the top
-            conf_sort_index = torch.sort(image_pred_class[:,4], descending = True )[1]
+            conf_sort_index = torch.sort(image_pred_class[:,4], descending = True )[1]   # [1]代表取索引
             image_pred_class = image_pred_class[conf_sort_index]
             idx = image_pred_class.size(0)
             
@@ -188,7 +200,7 @@ def write_results(prediction, confidence, num_classes, nms = True, nms_conf = 0.
                     #Remove the non-zero entries
                     non_zero_ind = torch.nonzero(image_pred_class[:,4]).squeeze()
                     image_pred_class = image_pred_class[non_zero_ind].view(-1,7)
-                    
+                
                     
 
             #Concatenate the batch_id of the image to the detection
