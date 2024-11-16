@@ -12,8 +12,6 @@ document it as well as I can.
 ### Tutorial for building this detector from scratch
 If you want to understand how to implement this detector by yourself from scratch, then you can go through this very detailed 5-part tutorial series I wrote on Paperspace. Perfect for someone who wants to move from beginner to intermediate pytorch skills. 
 
-[Implement YOLO v3 from scratch](https://blog.paperspace.com/how-to-implement-a-yolo-object-detector-in-pytorch/)
-
 As of now, the code only contains the detection module, but you should expect the training module soon. :) 
 
 ## Requirements
@@ -39,9 +37,12 @@ the weights file into your repo directory. Or, you could just type (if you're on
 
 ```
 wget https://pjreddie.com/media/files/yolov3.weights 
-python detect.py --images imgs --det det 
+python detect.py --images imgs --det det
 ```
-
+for running it on google colab use below code 
+!wget https://pjreddie.com/media/files/yolov3.weights
+!wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg
+!wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names
 
 `--images` flag defines the directory to load images from, or a single image file (it will figure it out), and `--det` is the directory
 to save images to. Other setting such as batch size (using `--bs` flag) , object threshold confidence can be tweaked with flags that can be looked up with. 
